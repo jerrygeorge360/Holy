@@ -39,7 +39,7 @@ const ensureRepoExists = async (repoId?: string, repoFullName?: string) => {
         include: { owner: true },
       })
     : await prisma.repository.findUnique({
-        where: { fullName: repoFullName ?? undefined },
+        where: { fullName: repoFullName as string },
         include: { owner: true },
       });
   if (!repo) {
