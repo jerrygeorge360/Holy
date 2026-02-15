@@ -16,6 +16,8 @@ model User {
   id        String       @id @default(uuid()) @db.Uuid
   username  String       @unique
   email     String?
+  githubId    Int?     @unique
+  githubToken String?
   createdAt DateTime     @default(now())
   memoryRevokedAt DateTime?
 
@@ -29,6 +31,8 @@ model Repository {
   name      String
   fullName  String?  @unique
   url       String
+  webhookId   Int?
+  nearWallet  String?
   createdAt DateTime @default(now())
 
   ownerId String @db.Uuid
