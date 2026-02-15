@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
@@ -126,6 +126,10 @@ router.get("/github/callback", async (req: Request, res: Response) => {
 // GET /auth/me
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
   try {
+    if (!req.authUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: req.authUserId },
       select: {

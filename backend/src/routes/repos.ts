@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../../lib/prisma.js";
 
 const router = Router();
 
@@ -30,6 +30,10 @@ const isValidRepoFullName = (repo: string): boolean => {
 // POST /api/repos/connect
 router.post("/connect", async (req: Request, res: Response) => {
   const { repo, nearWallet, criteria } = req.body as ConnectRepoBody;
+
+  if (!req.authUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   if (!repo || !nearWallet || !criteria) {
     return res
@@ -126,11 +130,11 @@ router.post("/connect", async (req: Request, res: Response) => {
     // Store criteria in Preference model
     await prisma.preference.upsert({
       where: { repoId: repository.id },
-      update: { settings: criteria },
+      update: { settings: criteria as any },
       create: {
         repoId: repository.id,
         userId: req.authUserId,
-        settings: criteria,
+        settings: criteria as any,
         source: "github_oauth",
       },
     });
@@ -188,6 +192,10 @@ router.post("/connect", async (req: Request, res: Response) => {
 
 // GET /api/repos/me
 router.get("/me", async (req: Request, res: Response) => {
+  if (!req.authUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
     const repos = await prisma.repository.findMany({
       where: { ownerId: req.authUserId },
