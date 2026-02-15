@@ -4,8 +4,37 @@ import { prisma } from "../../lib/prisma.js";
 
 const router = Router();
 
-// GET /api/criteria/:owner/:repo
-// Get review criteria for a repository
+/**
+ * @swagger
+ * /api/criteria/{owner}/{repo}:
+ *   get:
+ *     summary: Get review criteria for a repository
+ *     tags: [Criteria]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Criteria data
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.get("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
@@ -46,8 +75,53 @@ router.get("/:owner/:repo", async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/criteria/:owner/:repo
-// Update review criteria for a repository
+/**
+ * @swagger
+ * /api/criteria/{owner}/{repo}:
+ *   put:
+ *     summary: Update review criteria for a repository
+ *     tags: [Criteria]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - criteria
+ *             properties:
+ *               criteria:
+ *                 type: object
+ *                 example: { "guidelines": ["Check for security", "Check for performance"] }
+ *     responses:
+ *       200:
+ *         description: Criteria updated successfully
+ *       400:
+ *         description: Missing required field
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       500:
+ *         description: Internal server error
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.put("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;

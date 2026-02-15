@@ -4,8 +4,48 @@ import { prisma } from "../../lib/prisma.js";
 
 const router = Router();
 
-// POST /api/bounty/attach
-// Attach a bounty to a GitHub issue or PR
+/**
+ * @swagger
+ * /api/bounty/attach:
+ *   post:
+ *     summary: Attach a bounty to a GitHub issue or PR
+ *     tags: [Bounties]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - repo
+ *               - amount
+ *             properties:
+ *               repo:
+ *                 type: string
+ *                 example: octocat/hello-world
+ *               issueNumber:
+ *                 type: number
+ *               prNumber:
+ *                 type: number
+ *               amount:
+ *                 type: string
+ *                 example: "10"
+ *     responses:
+ *       201:
+ *         description: Bounty attached successfully
+ *       400:
+ *         description: Missing required fields
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       500:
+ *         description: Internal server error
+ */
 router.post("/attach", async (req: Request, res: Response) => {
   const { repo, issueNumber, prNumber, amount } = req.body || {};
 
@@ -43,18 +83,18 @@ router.post("/attach", async (req: Request, res: Response) => {
 
     const bounty = existingBounty
       ? await prisma.bounty.update({
-          where: { id: existingBounty.id },
-          data: { amount: String(amount), status: "open" },
-        })
+        where: { id: existingBounty.id },
+        data: { amount: String(amount), status: "open" },
+      })
       : await prisma.bounty.create({
-          data: {
-            repoId: repository.id,
-            issueNumber: issueNumber ? Number(issueNumber) : null,
-            prNumber: prNumber ? Number(prNumber) : null,
-            amount: String(amount),
-            status: "open",
-          },
-        });
+        data: {
+          repoId: repository.id,
+          issueNumber: issueNumber ? Number(issueNumber) : null,
+          prNumber: prNumber ? Number(prNumber) : null,
+          amount: String(amount),
+          status: "open",
+        },
+      });
 
     return res.status(201).json({ bounty });
   } catch (err) {
@@ -63,8 +103,45 @@ router.post("/attach", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/bounty/:owner/:repo/pr/:prNumber
-// Used by Shade Agent to check bounty on merged PRs
+/**
+ * @swagger
+ * /api/bounty/{owner}/{repo}/pr/{prNumber}:
+ *   get:
+ *     summary: Check bounty for a merged PR (Used by Shade Agent)
+ *     tags: [Bounties]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: prNumber
+ *         required: true
+ *         schema:
+ *           type: number
+ *       - in: header
+ *         name: x-agent-secret
+ *         schema:
+ *           type: string
+ *         description: Shared secret for agent-only access
+ *     responses:
+ *       200:
+ *         description: Bounty data for the PR
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Repository or bounty not found
+ *       500:
+ *         description: Internal server error
+ */
 router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => {
   const { owner, repo, prNumber } = req.params;
   const fullName = `${owner}/${repo}`;
@@ -103,8 +180,37 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
   }
 });
 
-// GET /api/bounty/:owner/:repo
-// List all bounties for a repo (UI use)
+/**
+ * @swagger
+ * /api/bounty/{owner}/{repo}:
+ *   get:
+ *     summary: List all bounties for a repository
+ *     tags: [Bounties]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of bounties
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       500:
+ *         description: Internal server error
+ */
 router.get("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
@@ -139,8 +245,34 @@ router.get("/:owner/:repo", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/bounty/:id/mark-paid
-// Mark bounty as paid after successful payout (agent-only)
+/**
+ * @swagger
+ * /api/bounty/{id}/mark-paid:
+ *   post:
+ *     summary: Mark bounty as paid (agent-only)
+ *     tags: [Bounties]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: header
+ *         name: x-agent-secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Bounty marked as paid
+ *       400:
+ *         description: Missing bounty id
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
 router.post("/:id/mark-paid", async (req: Request, res: Response) => {
   const { id } = req.params;
   const agentSecret = req.header("x-agent-secret");
@@ -167,8 +299,50 @@ router.post("/:id/mark-paid", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/bounty/release
-// Proxy to shade agent's bounty release endpoint
+/**
+ * @swagger
+ * /api/bounty/release:
+ *   post:
+ *     summary: Trigger manual bounty release via Shade Agent
+ *     tags: [Bounties]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - repo
+ *               - contributorWallet
+ *               - prNumber
+ *             properties:
+ *               repo:
+ *                 type: string
+ *                 example: octocat/hello-world
+ *               contributorWallet:
+ *                 type: string
+ *                 example: contributor.testnet
+ *               prNumber:
+ *                 type: number
+ *               amount:
+ *                 type: string
+ *                 example: "10"
+ *     responses:
+ *       200:
+ *         description: Bounty release triggered
+ *       400:
+ *         description: Missing required fields
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       500:
+ *         description: Internal server error
+ */
 router.post("/release", async (req: Request, res: Response) => {
   const { repo, contributorWallet, prNumber, amount } = req.body;
 
@@ -226,8 +400,22 @@ router.post("/release", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/bounty/history
-// Proxy to shade agent's payout history endpoint
+/**
+ * @swagger
+ * /api/bounty/history:
+ *   get:
+ *     summary: Get bounty payout history from Shade Agent
+ *     tags: [Bounties]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Payout history list
+ *       401:
+ *         description: Unauthorized
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.get("/history", async (req: Request, res: Response) => {
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });

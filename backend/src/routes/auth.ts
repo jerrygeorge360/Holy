@@ -6,7 +6,16 @@ import { config } from "../config/index.js";
 
 const router = Router();
 
-// GET /auth/github
+/**
+ * @swagger
+ * /auth/github:
+ *   get:
+ *     summary: Redirect to GitHub for OAuth
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirects to GitHub OAuth page
+ */
 router.get("/github", (_req: Request, res: Response) => {
   const scopes = "repo admin:repo_hook";
   const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
@@ -20,7 +29,27 @@ router.get("/github", (_req: Request, res: Response) => {
   res.redirect(githubAuthUrl.toString());
 });
 
-// GET /auth/github/callback
+/**
+ * @swagger
+ * /auth/github/callback:
+ *   get:
+ *     summary: GitHub OAuth callback handler
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         description: Authorization code from GitHub
+ *       - in: query
+ *         name: error
+ *         schema:
+ *           type: string
+ *         description: Error message from GitHub (if any)
+ *     responses:
+ *       302:
+ *         description: Redirects to frontend with token or error
+ */
 router.get("/github/callback", async (req: Request, res: Response) => {
   const { code, error } = req.query;
 
@@ -115,7 +144,40 @@ router.get("/github/callback", async (req: Request, res: Response) => {
   }
 });
 
-// GET /auth/me
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Get currently authenticated user profile
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   format: uuid
+ *                 username:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 repositories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
   try {
     if (!req.authUserId) {
@@ -152,7 +214,23 @@ router.get("/me", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/logout
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Log out the current user
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Successfully logged out
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
 router.post("/logout", (_req: Request, res: Response) => {
   return res.json({ message: "Logged out successfully" });
 });

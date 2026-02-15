@@ -24,7 +24,44 @@ const isValidRepoFullName = (repo: string): boolean => {
   return /^[^/\s]+\/[^/\s]+$/.test(repo);
 };
 
-// POST /api/repos/connect
+/**
+ * @swagger
+ * /api/repos/connect:
+ *   post:
+ *     summary: Connect a repository and install a GitHub webhook
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - repo
+ *             properties:
+ *               repo:
+ *                 type: string
+ *                 description: Full name of the repository (owner/repo)
+ *                 example: octocat/hello-world
+ *               criteria:
+ *                 type: object
+ *                 description: Optional AI review guidance
+ *     responses:
+ *       201:
+ *         description: Repository connected successfully
+ *       400:
+ *         description: Missing required field or invalid format
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Insufficient permissions or token not found
+ *       409:
+ *         description: Repo already connected
+ *       500:
+ *         description: Internal server error
+ */
 router.post("/connect", async (req: Request, res: Response) => {
   const { repo, criteria } = req.body as ConnectRepoBody;
 
@@ -163,7 +200,22 @@ router.post("/connect", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/repos/me
+/**
+ * @swagger
+ * /api/repos/me:
+ *   get:
+ *     summary: Get all repositories connected by the authenticated user
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of connected repositories with bounty balance
+ *       401:
+ *         description: Unauthorized
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.get("/me", async (req: Request, res: Response) => {
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -208,7 +260,35 @@ router.get("/me", async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/repos/:owner/:repo
+/**
+ * @swagger
+ * /api/repos/{owner}/{repo}:
+ *   delete:
+ *     summary: Disconnect a repository and remove its webhook
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Repository disconnected successfully
+ *       403:
+ *         description: Not the owner or missing token
+ *       404:
+ *         description: Repository not found
+ *       500:
+ *         description: Internal server error
+ */
 router.delete("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
@@ -273,8 +353,51 @@ router.delete("/:owner/:repo", async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/repos/:owner/:repo
-// Update repository (add NEAR wallet and trigger contract registration)
+/**
+ * @swagger
+ * /api/repos/{owner}/{repo}:
+ *   put:
+ *     summary: Update repository (e.g., add NEAR wallet and trigger contract registration)
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nearWallet
+ *             properties:
+ *               nearWallet:
+ *                 type: string
+ *                 example: maintainer.testnet
+ *     responses:
+ *       200:
+ *         description: NEAR wallet added and contract registered successfully
+ *       400:
+ *         description: Missing required field
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       503:
+ *         description: Agent service unavailable or contract registration failed
+ */
 router.put("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
@@ -328,17 +451,17 @@ router.put("/:owner/:repo", async (req: Request, res: Response) => {
           where: { id: repository.id },
           data: { nearWallet: repository.nearWallet },
         });
-        return res.status(503).json({ 
+        return res.status(503).json({
           error: "Failed to register with contract",
-          details: errorData 
+          details: errorData
         });
       }
 
       const result = await registerResponse.json();
-      return res.json({ 
+      return res.json({
         message: "NEAR wallet added and contract registered successfully",
         nearWallet,
-        contractRegistration: result 
+        contractRegistration: result
       });
     } catch (err) {
       console.error("Contract registration error:", err);
@@ -355,7 +478,29 @@ router.put("/:owner/:repo", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/repos/:owner/:repo/bounty
+/**
+ * @swagger
+ * /api/repos/{owner}/{repo}/bounty:
+ *   get:
+ *     summary: Get current bounty balance for a repository
+ *     tags: [Repositories]
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Bounty data
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.get("/:owner/:repo/bounty", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
 
@@ -395,8 +540,37 @@ router.get("/:owner/:repo/balance", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/repos/:owner/:repo/fund
-// Returns instructions for maintainer to fund their repo's bounty pool
+/**
+ * @swagger
+ * /api/repos/{owner}/{repo}/fund:
+ *   post:
+ *     summary: Get instructions for funding a repository's bounty pool
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Funding instructions and CLI example
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner
+ *       404:
+ *         description: Repository not found
+ *       503:
+ *         description: Agent service unavailable
+ */
 router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;

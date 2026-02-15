@@ -8,6 +8,8 @@ import routes from "./routes/index.js";
 import authRouter from "./routes/authRoutes.js";
 import { requireAuth } from "./middleware/auth.js";
 import { config } from "./config/index.js";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 
 const app = express();
 
@@ -29,6 +31,9 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // Auth routes
 app.use("/auth", authRouter);
+
+// Swagger documentation
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // API routes (all authenticated)
 app.use("/api", requireAuth, routes);
