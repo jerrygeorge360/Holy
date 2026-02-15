@@ -6,8 +6,7 @@ const router = Router();
 
 interface ConnectRepoBody {
   repo: string;
-  maintainerNearId?: string; // Optional: NEAR account for funding bounties
-  criteria: Record<string, unknown>; // Just so you know this is like a dictionary in python
+  criteria?: Record<string, unknown>; // Optional: AI review guidance
 }
 
 interface GitHubRepo {
@@ -27,16 +26,16 @@ const isValidRepoFullName = (repo: string): boolean => {
 
 // POST /api/repos/connect
 router.post("/connect", async (req: Request, res: Response) => {
-  const { repo, maintainerNearId, criteria } = req.body as ConnectRepoBody;
+  const { repo, criteria } = req.body as ConnectRepoBody;
 
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (!repo || !criteria) {
+  if (!repo) {
     return res
       .status(400)
-      .json({ error: "Missing required fields: repo, criteria" });
+      .json({ error: "Missing required field: repo" });
   }
 
   if (!isValidRepoFullName(repo)) {
@@ -112,7 +111,7 @@ router.post("/connect", async (req: Request, res: Response) => {
 
     const githubRepo = (await repoResponse.json()) as GitHubRepo;
 
-    // Create Repository in Prisma
+    // Create Repository in Prisma (without NEAR wallet yet - lazy loading)
     const repository = await prisma.repository.create({
       data: {
         githubId: githubRepo.id,
@@ -120,66 +119,42 @@ router.post("/connect", async (req: Request, res: Response) => {
         fullName: githubRepo.full_name,
         url: githubRepo.html_url,
         webhookId: webhookData.id,
-        nearWallet: maintainerNearId || null,
+        nearWallet: null, // Lazy loaded later
         ownerId: req.authUserId,
       },
     });
 
-    // Store criteria in Preference model
-    await prisma.preference.upsert({
-      where: { repoId: repository.id },
-      update: { settings: criteria as any },
-      create: {
-        repoId: repository.id,
-        userId: req.authUserId,
-        settings: criteria as any,
-        source: "github_oauth",
-      },
-    });
-
-    // Register repo on Shade Agent contract
-    try {
-      const registerResponse = await fetch(`${config.shadeAgentUrl}/api/repo/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repo: githubRepo.full_name,
-          maintainerNearId: maintainerNearId || `${req.authUserId}.near`,
-        }),
+    // Store criteria in Preference model (optional)
+    if (criteria) {
+      await prisma.preference.upsert({
+        where: { repoId: repository.id },
+        update: { settings: criteria as any },
+        create: {
+          repoId: repository.id,
+          userId: req.authUserId,
+          settings: criteria as any,
+          source: "github_oauth",
+        },
       });
 
-      if (!registerResponse.ok) {
-        console.error("Failed to register repo on Shade Agent:", registerResponse.statusText);
-        await prisma.repository.delete({ where: { id: repository.id } });
-        return res.status(503).json({ error: "Agent service unavailable" });
+      // Set criteria on Shade Agent (optional guidance for AI reviews)
+      try {
+        await fetch(`${config.shadeAgentUrl}/api/criteria`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repo: githubRepo.full_name,
+            criteria: JSON.stringify(criteria),
+          }),
+        });
+      } catch (err) {
+        console.error("Shade Agent criteria error (non-fatal):", err);
+        // Don't fail the connection if criteria sync fails
       }
-    } catch (err) {
-      console.error("Shade Agent registration error:", err);
-      await prisma.repository.delete({ where: { id: repository.id } });
-      return res.status(503).json({ error: "Agent service unavailable" });
     }
 
-    // Set criteria on Shade Agent
-    try {
-      const criteriaResponse = await fetch(`${config.shadeAgentUrl}/api/criteria`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repo: githubRepo.full_name,
-          criteria: JSON.stringify(criteria),
-        }),
-      });
-
-      if (!criteriaResponse.ok) {
-        console.error("Failed to set criteria on Shade Agent:", criteriaResponse.statusText);
-        await prisma.repository.delete({ where: { id: repository.id } });
-        return res.status(503).json({ error: "Agent service unavailable" });
-      }
-    } catch (err) {
-      console.error("Shade Agent criteria error:", err);
-      await prisma.repository.delete({ where: { id: repository.id } });
-      return res.status(503).json({ error: "Agent service unavailable" });
-    }
+    // NOTE: Contract registration is deferred until nearWallet is set
+    // User will call PUT /repos/:owner/:repo to add NEAR wallet later
 
     return res.status(201).json(repository);
   } catch (err) {
@@ -298,6 +273,88 @@ router.delete("/:owner/:repo", async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/repos/:owner/:repo
+// Update repository (add NEAR wallet and trigger contract registration)
+router.put("/:owner/:repo", async (req: Request, res: Response) => {
+  const { owner, repo } = req.params;
+  const fullName = `${owner}/${repo}`;
+  const { nearWallet } = req.body;
+
+  if (!req.authUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!nearWallet) {
+    return res.status(400).json({ error: "Missing required field: nearWallet" });
+  }
+
+  try {
+    // Find repo and verify ownership
+    const repository = await prisma.repository.findUnique({
+      where: { fullName },
+      select: { id: true, ownerId: true, nearWallet: true },
+    });
+
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found" });
+    }
+
+    if (repository.ownerId !== req.authUserId) {
+      return res.status(403).json({ error: "You do not own this repository" });
+    }
+
+    // Update nearWallet in database
+    await prisma.repository.update({
+      where: { id: repository.id },
+      data: { nearWallet },
+    });
+
+    // Register with contract (lazy loading trigger)
+    try {
+      const registerResponse = await fetch(`${config.shadeAgentUrl}/api/repo/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repo: fullName,
+          maintainerNearId: nearWallet,
+        }),
+      });
+
+      if (!registerResponse.ok) {
+        const errorData = await registerResponse.json();
+        console.error("Failed to register repo on contract:", errorData);
+        // Rollback database update
+        await prisma.repository.update({
+          where: { id: repository.id },
+          data: { nearWallet: repository.nearWallet },
+        });
+        return res.status(503).json({ 
+          error: "Failed to register with contract",
+          details: errorData 
+        });
+      }
+
+      const result = await registerResponse.json();
+      return res.json({ 
+        message: "NEAR wallet added and contract registered successfully",
+        nearWallet,
+        contractRegistration: result 
+      });
+    } catch (err) {
+      console.error("Contract registration error:", err);
+      // Rollback database update
+      await prisma.repository.update({
+        where: { id: repository.id },
+        data: { nearWallet: repository.nearWallet },
+      });
+      return res.status(503).json({ error: "Agent service unavailable" });
+    }
+  } catch (err) {
+    console.error("Update repo error:", err);
+    return res.status(500).json({ error: "Failed to update repository" });
+  }
+});
+
 // GET /api/repos/:owner/:repo/bounty
 router.get("/:owner/:repo/bounty", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
@@ -352,7 +409,7 @@ router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
     // Verify repo ownership
     const repository = await prisma.repository.findUnique({
       where: { fullName },
-      select: { ownerId: true, nearWallet: true },
+      select: { ownerId: true, nearWallet: true, owner: { select: { username: true } } },
     });
 
     if (!repository) {
@@ -371,6 +428,7 @@ router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
 
     const healthData = await healthResponse.json();
     const contractId = healthData.agentAccountId;
+    const maintainerAccount = repository.nearWallet || `${repository.owner.username}.testnet`;
 
     return res.json({
       message: "To fund your repo's bounty pool, call the NEAR contract directly",
@@ -379,9 +437,9 @@ router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
         contractId: contractId,
         args: { repo_id: fullName },
         deposit: "Amount in NEAR you want to deposit",
-        maintainerAccount: repository.nearWallet || `${req.authUserId}.near`,
+        maintainerAccount: maintainerAccount,
       },
-      cliExample: `near call ${contractId} fund_bounty '{"repo_id": "${fullName}"}' --accountId ${repository.nearWallet || `${req.authUserId}.near`} --deposit 10`,
+      cliExample: `near call ${contractId} fund_bounty '{"repo_id": "${fullName}"}' --accountId ${maintainerAccount} --deposit 10`,
     });
   } catch (err) {
     console.error("Fund endpoint error:", err);

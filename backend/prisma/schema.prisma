@@ -41,6 +41,7 @@ model Repository {
   reviews Review[]
   issues Issue[]
   preferences Preference[]
+  bounties Bounty[]
 
   @@index([ownerId])
 }
@@ -82,6 +83,23 @@ model Issue {
 
   @@index([reviewId])
   @@index([repoId])
+}
+
+model Bounty {
+  id          String   @id @default(uuid()) @db.Uuid
+  repoId      String   @db.Uuid
+  issueNumber Int?
+  prNumber    Int?
+  amount      String
+  status      String?  // e.g. "open", "paid"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@index([prNumber])
+  @@index([issueNumber])
 }
 
 model Preference {

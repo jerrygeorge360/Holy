@@ -3,11 +3,11 @@ import express, { Request, Response } from "express";
 import axios from "axios";
 import { reviewPullRequest } from "../services/review";
 import { postPayoutComment, postReviewComment } from "../services/github";
-import { getBounty, releaseBounty } from "../services/bounty";
+import { releaseBounty } from "../services/bounty";
 
 const router = express.Router();
 
-const VALID_ACTIONS = new Set(["opened", "synchronize", "reopened"]);
+const VALID_ACTIONS = new Set(["opened", "synchronize", "reopened", "closed"]);
 
 function verifySignature(rawBody: Buffer, signatureHeader?: string): boolean {
   if (!signatureHeader) return false;
@@ -98,6 +98,61 @@ router.post("/", async (req: Request, res: Response) => {
 
     const diff = diffResponse.data as string;
 
+    if (action === "closed" && pr?.merged) {
+      const backendUrl = process.env.BACKEND_URL;
+      const agentSecret = process.env.MAINTAINER_SECRET;
+
+      if (!backendUrl || !agentSecret) {
+        console.error("Missing BACKEND_URL or MAINTAINER_SECRET");
+        return res.status(500).json({ error: "Missing backend configuration" });
+      }
+
+      try {
+        const [owner, name] = repoFullName.split("/");
+        const bountyResponse = await axios.get(
+          `${backendUrl}/api/bounty/${owner}/${name}/pr/${prNumber}`,
+          { headers: { "x-agent-secret": agentSecret } },
+        );
+
+        const bounty = bountyResponse.data?.bounty;
+        if (!bounty?.amount) {
+          return res.status(200).json({ status: "no-bounty" });
+        }
+
+        const contributorWallet =
+          process.env.TEST_CONTRIBUTOR_WALLET || contributor;
+
+        const payoutResult = await releaseBounty({
+          repoFullName,
+          contributorWallet,
+          prNumber,
+          amount: String(bounty.amount),
+        });
+
+        const message = payoutResult.success
+          ? `✅ Bounty released: ${bounty.amount} NEAR\nTx: ${payoutResult.txHash || ""}`
+          : `❌ Bounty release failed: ${payoutResult.error || "Unknown error"}`;
+
+        await postPayoutComment({
+          repoFullName,
+          prNumber,
+          message,
+        });
+
+        if (payoutResult.success && bounty?.id) {
+          await axios.post(
+            `${backendUrl}/api/bounty/${bounty.id}/mark-paid`,
+            {},
+            { headers: { "x-agent-secret": agentSecret } },
+          );
+        }
+      } catch (error) {
+        console.error("Failed to release bounty on merge:", error);
+      }
+
+      return res.status(200).json({ status: "processed" });
+    }
+
     const reviewResult = await reviewPullRequest({
       diff,
       repoFullName,
@@ -117,33 +172,6 @@ router.post("/", async (req: Request, res: Response) => {
       prNumber,
       review: reviewResult,
     });
-
-    if (reviewResult.approved) {
-      const contributorWallet =
-        process.env.TEST_CONTRIBUTOR_WALLET || contributor;
-
-      try {
-        const bountyAmount = await getBounty(repoFullName);
-        const payoutResult = await releaseBounty({
-          repoFullName,
-          contributorWallet,
-          prNumber,
-          amount: bountyAmount,
-        });
-
-        const message = payoutResult.success
-          ? `✅ Bounty released: ${bountyAmount} NEAR\nTx: ${payoutResult.txHash || ""}`
-          : `❌ Bounty release failed: ${payoutResult.error || "Unknown error"}`;
-
-        await postPayoutComment({
-          repoFullName,
-          prNumber,
-          message,
-        });
-      } catch (error) {
-        console.error("Failed to release bounty:", error);
-      }
-    }
 
     return res.status(200).json({ status: "processed" });
   } catch (error) {
