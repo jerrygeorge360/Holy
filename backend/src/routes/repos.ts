@@ -1,15 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { config } from "../config/index.js";
 
 const router = Router();
 
-const SHADE_AGENT_URL = process.env.SHADE_AGENT_URL || "http://localhost:3000";
-const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || "";
-
 interface ConnectRepoBody {
   repo: string;
-  nearWallet: string;
-  criteria: Record<string, unknown>;
+  maintainerNearId?: string; // Optional: NEAR account for funding bounties
+  criteria: Record<string, unknown>; // Just so you know this is like a dictionary in python
 }
 
 interface GitHubRepo {
@@ -29,16 +27,16 @@ const isValidRepoFullName = (repo: string): boolean => {
 
 // POST /api/repos/connect
 router.post("/connect", async (req: Request, res: Response) => {
-  const { repo, nearWallet, criteria } = req.body as ConnectRepoBody;
+  const { repo, maintainerNearId, criteria } = req.body as ConnectRepoBody;
 
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (!repo || !nearWallet || !criteria) {
+  if (!repo || !criteria) {
     return res
       .status(400)
-      .json({ error: "Missing required fields: repo, nearWallet, criteria" });
+      .json({ error: "Missing required fields: repo, criteria" });
   }
 
   if (!isValidRepoFullName(repo)) {
@@ -77,9 +75,9 @@ router.post("/connect", async (req: Request, res: Response) => {
         active: true,
         events: ["pull_request"],
         config: {
-          url: `${SHADE_AGENT_URL}/api/webhook`,
+          url: `${config.shadeAgentUrl}/api/webhook`,
           content_type: "json",
-          secret: GITHUB_WEBHOOK_SECRET,
+          secret: config.github.webhookSecret,
         },
       }),
     });
@@ -122,7 +120,7 @@ router.post("/connect", async (req: Request, res: Response) => {
         fullName: githubRepo.full_name,
         url: githubRepo.html_url,
         webhookId: webhookData.id,
-        nearWallet: nearWallet,
+        nearWallet: maintainerNearId || null,
         ownerId: req.authUserId,
       },
     });
@@ -141,12 +139,12 @@ router.post("/connect", async (req: Request, res: Response) => {
 
     // Register repo on Shade Agent contract
     try {
-      const registerResponse = await fetch(`${SHADE_AGENT_URL}/api/repo/register`, {
+      const registerResponse = await fetch(`${config.shadeAgentUrl}/api/repo/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: githubRepo.full_name,
-          maintainerWallet: nearWallet,
+          maintainerNearId: maintainerNearId || `${req.authUserId}.near`,
         }),
       });
 
@@ -163,7 +161,7 @@ router.post("/connect", async (req: Request, res: Response) => {
 
     // Set criteria on Shade Agent
     try {
-      const criteriaResponse = await fetch(`${SHADE_AGENT_URL}/api/criteria`, {
+      const criteriaResponse = await fetch(`${config.shadeAgentUrl}/api/criteria`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -211,7 +209,7 @@ router.get("/me", async (req: Request, res: Response) => {
 
         try {
           const bountyResponse = await fetch(
-            `${SHADE_AGENT_URL}/api/bounty/${owner}/${name}`
+            `${config.shadeAgentUrl}/api/bounty/${owner}/${name}`
           );
 
           if (!bountyResponse.ok) {
@@ -305,7 +303,7 @@ router.get("/:owner/:repo/bounty", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
 
   try {
-    const bountyResponse = await fetch(`${SHADE_AGENT_URL}/api/bounty/${owner}/${repo}`);
+    const bountyResponse = await fetch(`${config.shadeAgentUrl}/api/bounty/${owner}/${repo}`);
 
     if (!bountyResponse.ok) {
       console.error("Failed to fetch bounty from Shade Agent");
@@ -317,6 +315,77 @@ router.get("/:owner/:repo/bounty", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Bounty fetch error:", err);
     return res.status(503).json({ error: "Agent service unavailable" });
+  }
+});
+
+// GET /api/repos/:owner/:repo/balance (alias for bounty)
+router.get("/:owner/:repo/balance", async (req: Request, res: Response) => {
+  const { owner, repo } = req.params;
+
+  try {
+    const bountyResponse = await fetch(`${config.shadeAgentUrl}/api/bounty/${owner}/${repo}`);
+
+    if (!bountyResponse.ok) {
+      console.error("Failed to fetch bounty from Shade Agent");
+      return res.status(503).json({ error: "Agent service unavailable" });
+    }
+
+    const bountyData = await bountyResponse.json();
+    return res.json(bountyData);
+  } catch (err) {
+    console.error("Bounty fetch error:", err);
+    return res.status(503).json({ error: "Agent service unavailable" });
+  }
+});
+
+// POST /api/repos/:owner/:repo/fund
+// Returns instructions for maintainer to fund their repo's bounty pool
+router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
+  const { owner, repo } = req.params;
+  const fullName = `${owner}/${repo}`;
+
+  if (!req.authUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // Verify repo ownership
+    const repository = await prisma.repository.findUnique({
+      where: { fullName },
+      select: { ownerId: true, nearWallet: true },
+    });
+
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found" });
+    }
+
+    if (repository.ownerId !== req.authUserId) {
+      return res.status(403).json({ error: "You do not own this repository" });
+    }
+
+    // Get contract info from shade agent
+    const healthResponse = await fetch(`${config.shadeAgentUrl}/api/health`);
+    if (!healthResponse.ok) {
+      return res.status(503).json({ error: "Agent service unavailable" });
+    }
+
+    const healthData = await healthResponse.json();
+    const contractId = healthData.agentAccountId;
+
+    return res.json({
+      message: "To fund your repo's bounty pool, call the NEAR contract directly",
+      instructions: {
+        method: "fund_bounty",
+        contractId: contractId,
+        args: { repo_id: fullName },
+        deposit: "Amount in NEAR you want to deposit",
+        maintainerAccount: repository.nearWallet || `${req.authUserId}.near`,
+      },
+      cliExample: `near call ${contractId} fund_bounty '{"repo_id": "${fullName}"}' --accountId ${repository.nearWallet || `${req.authUserId}.near`} --deposit 10`,
+    });
+  } catch (err) {
+    console.error("Fund endpoint error:", err);
+    return res.status(500).json({ error: "Failed to generate funding instructions" });
   }
 });
 

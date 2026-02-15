@@ -2,23 +2,20 @@ import { Router, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { config } from "../config/index.js";
 
 const router = Router();
-
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || "";
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || "";
-const GITHUB_REDIRECT_URI = process.env.GITHUB_REDIRECT_URI || "";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3001";
-const JWT_SECRET = process.env.SESSION_SECRET || "dev-secret-key";
 
 // GET /auth/github
 router.get("/github", (_req: Request, res: Response) => {
   const scopes = "repo admin:repo_hook";
   const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
-  githubAuthUrl.searchParams.append("client_id", GITHUB_CLIENT_ID);
-  githubAuthUrl.searchParams.append("redirect_uri", GITHUB_REDIRECT_URI);
+  githubAuthUrl.searchParams.append("client_id", config.github.clientId);
+  githubAuthUrl.searchParams.append("redirect_uri", config.github.redirectUri);
   githubAuthUrl.searchParams.append("scope", scopes);
   githubAuthUrl.searchParams.append("allow_signup", "true");
+
+  console.log("Redirecting to GitHub OAuth URL:", githubAuthUrl.toString());
 
   res.redirect(githubAuthUrl.toString());
 });
@@ -30,14 +27,14 @@ router.get("/github/callback", async (req: Request, res: Response) => {
   if (error) {
     console.error("GitHub OAuth error:", error);
     return res.redirect(
-      `${FRONTEND_URL}/auth/error?message=${encodeURIComponent(String(error))}`
+      `${config.frontendUrl}/auth/error?message=${encodeURIComponent(String(error))}`
     );
   }
 
   if (!code) {
     console.error("No code received from GitHub");
     return res.redirect(
-      `${FRONTEND_URL}/auth/error?message=No authorization code received`
+      `${config.frontendUrl}/auth/error?message=No authorization code received`
     );
   }
 
@@ -50,8 +47,8 @@ router.get("/github/callback", async (req: Request, res: Response) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        client_id: GITHUB_CLIENT_ID,
-        client_secret: GITHUB_CLIENT_SECRET,
+        client_id: config.github.clientId,
+        client_secret: config.github.clientSecret,
         code: code,
       }),
     });
@@ -64,7 +61,7 @@ router.get("/github/callback", async (req: Request, res: Response) => {
     if (!tokenData.access_token) {
       console.error("Failed to get access token:", tokenData.error);
       return res.redirect(
-        `${FRONTEND_URL}/auth/error?message=Failed to authenticate with GitHub`
+        `${config.frontendUrl}/auth/error?message=Failed to authenticate with GitHub`
       );
     }
 
@@ -85,7 +82,7 @@ router.get("/github/callback", async (req: Request, res: Response) => {
     if (!githubUser.id) {
       console.error("Failed to fetch GitHub user");
       return res.redirect(
-        `${FRONTEND_URL}/auth/error?message=Failed to fetch user profile`
+        `${config.frontendUrl}/auth/error?message=Failed to fetch user profile`
       );
     }
 
@@ -105,20 +102,15 @@ router.get("/github/callback", async (req: Request, res: Response) => {
       select: { id: true },
     });
 
-    const authToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
-    res.cookie("auth_token", authToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return res.redirect(`${FRONTEND_URL}/dashboard`);
+    const authToken = jwt.sign({ userId: user.id }, config.sessionSecret, { expiresIn: "7d" });
+    return res.redirect(
+      `${config.frontendUrl}/auth/callback?token=${encodeURIComponent(authToken)}`
+    );
   } catch (err) {
     console.error("GitHub OAuth callback error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return res.redirect(
-      `${FRONTEND_URL}/auth/error?message=${encodeURIComponent(errorMessage)}`
+      `${config.frontendUrl}/auth/error?message=${encodeURIComponent(errorMessage)}`
     );
   }
 });
@@ -162,7 +154,6 @@ router.get("/me", requireAuth, async (req: Request, res: Response) => {
 
 // POST /auth/logout
 router.post("/logout", (_req: Request, res: Response) => {
-  res.clearCookie("auth_token");
   return res.json({ message: "Logged out successfully" });
 });
 

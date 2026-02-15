@@ -8,6 +8,7 @@ import routes from "./routes/index.js";
 import authRouter from "./routes/authRoutes.js";
 import reposRouter from "./routes/repos.js";
 import { requireAuth } from "./middleware/auth.js";
+import { config } from "./config/index.js";
 
 const app = express();
 
@@ -18,7 +19,7 @@ app.use(helmet());
 app.use(compression());
 
 // Logging middleware
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(morgan(config.nodeEnv === "production" ? "combined" : "dev"));
 
 app.use(express.json());
 

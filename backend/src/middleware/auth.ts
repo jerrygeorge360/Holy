@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.SESSION_SECRET || "dev-secret-key";
+import { config } from "../config/index.js";
 
 const getTokenFromRequest = (req: Request): string | null => {
   const authHeader = req.headers.authorization;
@@ -27,7 +26,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId?: string; sub?: string };
+    const payload = jwt.verify(token, config.sessionSecret) as { userId?: string; sub?: string };
     const userId = payload.userId || payload.sub;
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });

@@ -1,8 +1,22 @@
 import express, { Request, Response } from "express";
-import { getBounty, releaseBounty } from "../services/bounty";
+import { getBounty, releaseBounty, registerRepo } from "../services/bounty";
 import { getPayouts } from "../store/payoutLog";
 
 const router = express.Router();
+
+router.post("/api/repo/register", async (req: Request, res: Response) => {
+  const { repo, maintainerNearId } = req.body || {};
+
+  if (!repo || !maintainerNearId) {
+    return res.status(400).json({
+      success: false,
+      error: "repo and maintainerNearId are required",
+    });
+  }
+
+  const result = await registerRepo(repo, maintainerNearId);
+  return res.status(result.success ? 200 : 500).json(result);
+});
 
 router.get("/api/bounty/:owner/:repo", async (req: Request, res: Response) => {
   const repo = `${req.params.owner}/${req.params.repo}`;

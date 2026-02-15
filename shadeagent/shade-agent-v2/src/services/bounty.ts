@@ -18,6 +18,29 @@ function fromYocto(yocto: string): string {
   }
 }
 
+export async function registerRepo(
+  repoId: string,
+  maintainerNearId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const agent = getAgent();
+    await agent.call({
+      methodName: "register_repo",
+      args: {
+        repo_id: repoId,
+        maintainer_id: maintainerNearId,
+      },
+      gas: BigInt("30000000000000"),
+    });
+    console.log(`Registered repo: ${repoId} with maintainer: ${maintainerNearId}`);
+    return { success: true };
+  } catch (error: any) {
+    const message = error?.message ? String(error.message) : "Unknown error";
+    console.error("Failed to register repo:", error);
+    return { success: false, error: message };
+  }
+}
+
 export async function getBounty(repoFullName: string): Promise<string> {
   try {
     const agent = getAgent();
