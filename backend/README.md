@@ -1,6 +1,6 @@
-# Nyx Backend
+# Holy Backend
 
-The Nyx backend is a REST API that stores and manages repos, reviews, issues, bounties, and user data. It is the single entry point for the frontend and proxies relevant calls to the Shade Agent.
+The Holy backend is a REST API that stores and manages repos, reviews, issues, bounties, and user data. It is the single entry point for the frontend and proxies relevant calls to the Shade Agent.
 
 **What the backend does:**
 - Handles GitHub OAuth + JWT auth
