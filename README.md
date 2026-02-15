@@ -1,8 +1,10 @@
 # Holy
 
-Autonomous code review bounty platform with:
-- **Backend API** (Node.js/TypeScript, Prisma)
-- **Shade Agent** (NEAR Shade Agent Framework) for GitHub review + NEAR bounty payouts
+Open source code review automation and bounty platform for GitHub, powered by LLMs and the NEAR blockchain.
+
+## Overview
+
+Holy is a backend API for managing GitHub repository connections, bounties, and review criteria. It integrates with a separate Shade Agent service for LLM-powered code review and NEAR blockchain payouts.
 
 ## Repository Structure
 
@@ -10,14 +12,94 @@ Autonomous code review bounty platform with:
 - shadeagent/shade-agent-v2/ — Shade agent + agent contract
 - frontend/ — placeholder (Next.js)
 
-## Backend
+## Architecture
 
-The backend is the primary API and data layer. It stores users, repositories, reviews, issues, preferences, and notifications, and provides endpoints for managing and exporting that data.
+```
+		+-------------------+         +-------------------+         +-------------------+
+		|                   |         |                   |         |                   |
+		|    GitHub PRs     +-------->+     Holy API      +-------->+   Shade Agent     |
+		|                   | Webhook |                   |  Proxy  |  (LLM + NEAR)     |
+		+-------------------+         +-------------------+         +-------------------+
+```
 
-## Shade Agent
+1. Maintainers connect repos and install the webhook
+2. PRs trigger webhook events to Holy backend
+3. Backend proxies criteria requests to the Shade Agent
+4. Bounties are attached to PRs and paid out on merge
 
-The Shade Agent listens for GitHub pull request events, performs automated reviews, posts review comments, and triggers NEAR bounty payouts through the agent contract.
+## Key Features
 
-## Agent Contract
+- Connect GitHub repositories and install webhooks
+- Attach bounties to PRs
+- Manage review criteria (proxied to Shade Agent)
+- NEAR wallet registration (lazy, on demand)
+- GitHub OAuth authentication
 
-The agent contract holds bounty funds, tracks repo maintainers, and enforces permissions for funding, releasing, and withdrawing bounties.
+## Main Endpoints
+
+- **Auth**
+	- `GET /auth/github` — Start GitHub OAuth
+	- `GET /auth/github/callback` — OAuth callback
+	- `GET /auth/me` — Current user
+
+- **Repositories**
+	- `POST /repos/connect` — Connect repo + install webhook
+	- `GET /repos/me` — List connected repos
+	- `PUT /repos/:owner/:repo` — Add NEAR wallet (lazy contract registration)
+	- `DELETE /repos/:owner/:repo` — Disconnect repo
+
+- **Bounties**
+	- `POST /bounty/attach` — Attach bounty to PR
+	- `GET /bounty/:owner/:repo` — List repo bounties
+	- `GET /bounty/:owner/:repo/pr/:prNumber` — Agent lookup on merge
+	- `POST /bounty/:id/mark-paid` — Agent marks bounty as paid
+	- `POST /bounty/release` — Manual bounty release (owner-only)
+	- `GET /bounty/history` — Payout history
+
+- **Criteria**
+	- `GET /criteria/:owner/:repo` — Get review criteria (proxied to Shade Agent)
+	- `PUT /criteria/:owner/:repo` — Update review criteria (proxied to Shade Agent)
+
+- **Preferences**
+	- `POST /preferences` — Set repository preferences
+	- `GET /preferences` — Get preferences by userId or repoId
+	- `DELETE /preferences/:id` — Delete preferences
+
+See backend/README.md for detailed API documentation and example payloads.
+
+## Setup
+
+### Requirements
+- Node.js 18+
+- PostgreSQL
+
+### Environment
+Create a `.env` file:
+
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/nyx
+GITHUB_TOKEN=your_github_token
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+SHADE_AGENT_URL=http://localhost:3000
+MAINTAINER_SECRET=shared_secret_for_agent_calls
+PORT=3001
+```
+
+### Install
+```
+npm install
+```
+
+### Prisma
+```
+./node_modules/.bin/prisma generate
+```
+
+### Run
+```
+npm run dev
+```
+
+## License
+
+MIT

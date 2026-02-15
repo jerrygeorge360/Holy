@@ -38,51 +38,10 @@ model Repository {
   ownerId String @db.Uuid
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  reviews Review[]
-  issues Issue[]
   preferences Preference[]
   bounties Bounty[]
 
   @@index([ownerId])
-}
-
-model Review {
-  id        String   @id @default(uuid()) @db.Uuid
-  repoId    String   @db.Uuid
-  commitSha String?
-  prNumber  Int?
-  summary   String
-  approved  Boolean?
-  score     Int?
-  issues    Json
-  suggestions Json?
-  source    String?
-  agent     String?
-  createdAt DateTime @default(now())
-
-  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  notifications Notification[]
-  issuesList Issue[]
-
-  @@index([repoId])
-}
-
-model Issue {
-  id        String   @id @default(uuid()) @db.Uuid
-  reviewId  String   @db.Uuid
-  repoId    String   @db.Uuid
-  commitSha String?
-  title     String
-  details   String?
-  severity  String?
-  source    String?
-  createdAt DateTime @default(now())
-
-  review     Review     @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
-
-  @@index([reviewId])
-  @@index([repoId])
 }
 
 model Bounty {
@@ -117,22 +76,4 @@ model Preference {
 
   @@unique([repoId])
   @@index([userId])
-}
-
-enum NotificationType {
-  slack
-  email
-  github_comment
-}
-
-model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  reviewId  String           @db.Uuid
-  type      NotificationType
-  sent      Boolean          @default(false)
-  createdAt DateTime         @default(now())
-
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-
-  @@index([reviewId])
 }

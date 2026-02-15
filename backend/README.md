@@ -1,30 +1,19 @@
 # Holy Backend
 
-The Holy backend is a REST API that stores and manages repos, reviews, issues, bounties, and user data. It is the single entry point for the frontend and proxies relevant calls to the Shade Agent.
+The Holy backend is a REST API for managing GitHub repository connections, bounties, review criteria, and preferences. It serves as the single entry point for the frontend and proxies relevant calls to the Shade Agent.
 
 **What the backend does:**
 - Handles GitHub OAuth + JWT auth
-- Stores users, repositories, reviews, issues, preferences, and bounties in PostgreSQL
+- Stores users, repositories, bounties, criteria, and preferences in PostgreSQL
 - Installs GitHub webhooks on connected repositories
-- Proxies Shade Agent operations (bounty release, criteria sync)
-- Manages data export and privacy controls (inspect/export/delete/revoke)
+- Proxies Shade Agent operations (criteria sync, bounty payout)
 
 **What the Shade Agent does (separate service):**
-- Receives GitHub webhook events (PR opened/sync/reopen/merge)
-- Generates advisory code review comments
-- Posts review feedback to GitHub PRs
-- Releases bounties on merged PRs when a bounty is attached
-
-## Backend Features
-
-- REST API for review data management
-- GitHub repository metadata ingestion
-- Review storage with advisory feedback (summary/issues/suggestions)
-- Bounty attachment and payout tracking
-- Repository lookup by full name (owner/repo) or UUID
-- User-owned memory: inspect/export/delete/revoke
-- Data export pipeline (CSV, JSON)
-- Notification storage and management
+- Receives GitHub webhook events for pull requests (opened, synchronized, reopened, merged)
+- Evaluates pull requests against repository criteria
+- Provides advisory code review feedback using LLMs
+- Posts review comments to GitHub PRs
+- Coordinates and triggers NEAR bounty payouts when PRs are merged and criteria are met
 
 ## Stack
 
@@ -35,12 +24,10 @@ The Holy backend is a REST API that stores and manages repos, reviews, issues, b
 
 ## Data model (simplified)
 
-- User → Repositories → Reviews → Issues
-- Repository → Bounties (issue/PR scoped)
+- User → Repositories
+- Repository → Bounties (PR scoped)
+- Repository → Criteria
 - User → Preferences
-- Review → Notifications
-- Repository: stores GitHub repo metadata with `fullName` (unique) for easy lookup
-- Review: includes `approved` (boolean), `score` (0-100), `suggestions` (JSON array), and optional `commitSha`
 
 ## Architecture
 
@@ -83,76 +70,59 @@ The backend is the system of record. The Shade Agent is a separate service that 
 ## Endpoints
 
 ### Auth
-- GET /auth/github — Start GitHub OAuth
-- GET /auth/github/callback — OAuth callback
-- GET /auth/me — Current user
+- `GET /auth/github` — Start GitHub OAuth
+- `GET /auth/github/callback` — OAuth callback
+- `GET /auth/me` — Current user
 
 ### Repositories
-- POST /repos/connect — Connect repo + install webhook
-- GET /repos/me — List connected repos
-- PUT /repos/:owner/:repo — Add NEAR wallet (lazy contract registration)
-- DELETE /repos/:owner/:repo — Disconnect repo
-
-### Reviews
-- POST /reviews — Submit review (accepts `repoFullName` or `repoId`)
-- GET /reviews/:repoId — Get reviews for repository
-- GET /reviews — Query reviews by userId
-- DELETE /reviews/:id — Delete review
-
-### Issues
-- GET /issues — Query issues by userId
-- DELETE /issues/:issueId — Delete issue
+- `POST /repos/connect` — Connect repo + install webhook
+- `GET /repos/me` — List connected repos
+- `PUT /repos/:owner/:repo` — Add NEAR wallet (lazy contract registration)
+- `DELETE /repos/:owner/:repo` — Disconnect repo
 
 ### Bounties
-- POST /bounty/attach — Attach bounty to issue or PR
-- GET /bounty/:owner/:repo — List repo bounties
-- GET /bounty/:owner/:repo/pr/:prNumber — Agent lookup on merge
-- POST /bounty/:id/mark-paid — Agent marks bounty as paid
-- POST /bounty/release — Manual bounty release (owner-only)
-- GET /bounty/history — Payout history
+- `POST /bounty/attach` — Attach bounty to PR
+- `GET /bounty/:owner/:repo` — List repo bounties
+- `GET /bounty/:owner/:repo/pr/:prNumber` — Agent lookup on merge
+- `POST /bounty/:id/mark-paid` — Agent marks bounty as paid
+- `POST /bounty/release` — Manual bounty release (owner-only)
+- `GET /bounty/history` — Payout history
+
+### Criteria
+- `GET /criteria/:owner/:repo` — Get review criteria (proxied to Shade Agent)
+- `PUT /criteria/:owner/:repo` — Update review criteria (proxied to Shade Agent)
 
 ### Preferences
-- POST /preferences — Set repository preferences
-- GET /preferences — Get preferences by userId or repoId
-- DELETE /preferences/:id — Delete preferences
+- `POST /preferences` — Set repository preferences
+- `GET /preferences` — Get preferences by userId or repoId
+- `DELETE /preferences/:id` — Delete preferences
 
-### Notifications
-- POST /notifications — Create notification
-- GET /notifications — Query notifications by userId
-- PUT /notifications/:id — Update notification status
+## Example: Attach Bounty
 
-### Memory (export)
-- GET /export/reviews?userId=&format=csv|json
-- GET /export/issues?userId=&format=csv|json
-- GET /export/preferences?userId=&format=csv|json
-
-## Example
-
-POST /reviews
-
-The backend accepts reviews from the Shade Agent with repository lookup by full name:
+POST `/bounty/attach`
 
 ```json
 {
-	"repoFullName": "owner/repo",
-	"commitSha": "abc123",
-	"prNumber": 42,
-	"summary": "Code looks good with minor suggestions.",
-    "approved": true,
-    "score": 85,
-	"suggestions": [
-		"Consider adding error handling in line 42",
-		"Add unit tests for the new function"
-	],
-	"issues": [
-		{ "title": "Missing error handling", "details": "Function may throw unhandled exception", "severity": "medium" }
-	],
-	"source": "shade-agent",
-	"agent": "holy-groq-reviewer"
+  "owner": "octocat",
+  "repo": "hello-world",
+  "prNumber": 42,
+  "amount": "10.0",
+  "currency": "NEAR"
 }
 ```
 
-Alternatively, use `repoId` instead of `repoFullName` if you have the UUID.
+## Example: Update Criteria
+
+PUT `/criteria/octocat/hello-world`
+
+```json
+{
+  "criteria": [
+    "Code must be well-documented",
+    "Tests must cover new features"
+  ]
+}
+```
 
 ## Setup
 
@@ -187,6 +157,6 @@ npm install
 npm run dev
 ```
 
+## License
 
-## Privacy
-Memory can be inspected, exported, deleted, and revoked. Revocation prevents future storage and clears existing data for the user.
+MIT

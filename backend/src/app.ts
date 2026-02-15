@@ -6,7 +6,6 @@ import morgan from "morgan";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import routes from "./routes/index.js";
 import authRouter from "./routes/authRoutes.js";
-import reposRouter from "./routes/repos.js";
 import { requireAuth } from "./middleware/auth.js";
 import { config } from "./config/index.js";
 
@@ -31,11 +30,8 @@ app.get("/health", (_req: Request, res: Response) => {
 // Auth routes
 app.use("/auth", authRouter);
 
-// OAuth-enabled repos routes
-app.use("/api/repos", requireAuth, reposRouter);
-
-// Legacy routes
-app.use(routes);
+// API routes (all authenticated)
+app.use("/api", requireAuth, routes);
 
 app.use(errorHandler);
 
