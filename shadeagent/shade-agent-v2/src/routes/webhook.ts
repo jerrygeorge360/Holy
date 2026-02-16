@@ -139,11 +139,14 @@ router.post("/", async (req: Request, res: Response) => {
     );
 
     const { bounty, githubToken } = bountyResponse.data;
+    console.info(`[Step 1] Retrieved backend data. Bounty: ${bounty ? "Yes" : "No"}, Token: ${githubToken ? "Yes" : "No"}`);
 
     if (!githubToken) {
       console.error("Failed to retrieve githubToken from backend");
       return res.status(424).json({ error: "Failed Dependency: Missing repository owner permissions" });
     }
+
+    console.info(`[Step 2] Fetching diff for PR #${prNumber} from ${diffUrl}`);
 
     const diffResponse = await axios.get(diffUrl, {
       headers: {
@@ -160,6 +163,7 @@ router.post("/", async (req: Request, res: Response) => {
       }
       diff = diff.slice(0, 50000) + "\n\n[Diff truncated due to size]";
     }
+    console.info(`[Step 3] Diff retrieved (${diff.length} chars).`);
 
     if (action === "closed" && pr?.merged) {
       if (!bounty?.amount) {
@@ -212,6 +216,7 @@ router.post("/", async (req: Request, res: Response) => {
       },
       criteria: await getCriteria(repoFullName) || "Standard code review.",
     });
+    console.info(`[Step 4] AI Review generated. Score: ${reviewResult.score}`);
 
     await postReviewComment({
       repoFullName,
@@ -219,6 +224,7 @@ router.post("/", async (req: Request, res: Response) => {
       review: reviewResult,
       token: githubToken,
     });
+    console.info(`[Step 5] Successfully posted review comment to PR #${prNumber}`);
   } catch (error: any) {
     console.error("Failed to process webhook:", error.response?.data || error.message);
     const status = error.response?.status === 404 ? 404 : 500;
