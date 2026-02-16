@@ -134,7 +134,18 @@ router.post("/attach", async (req: Request, res: Response) => {
  *         description: Shared secret for agent-only access
  *     responses:
  *       200:
- *         description: Bounty data for the PR
+ *         description: Bounty data and repo owner's GitHub token (if authorized)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 bounty:
+ *                   $ref: '#/components/schemas/Bounty'
+ *                 githubToken:
+ *                   type: string
+ *                   description: The GitHub access token of the repository owner.
+ *                   nullable: true
  *       401:
  *         description: Unauthorized
  *       404:
@@ -147,14 +158,21 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
   const fullName = `${owner}/${repo}`;
   const agentSecret = req.header("x-agent-secret");
 
-  if (!req.authUserId && agentSecret !== process.env.MAINTAINER_SECRET) {
+  if (!req.authUserId && agentSecret !== config.maintainerSecret) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
     const repository = await prisma.repository.findUnique({
       where: { fullName },
-      select: { id: true },
+      select: {
+        id: true,
+        owner: {
+          select: {
+            githubToken: true
+          }
+        }
+      },
     });
 
     if (!repository) {
@@ -169,11 +187,15 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
       },
     });
 
+    // We return the githubToken only if requested by the agent with the secret
+    const githubToken = agentSecret === process.env.MAINTAINER_SECRET ? repository.owner?.githubToken : null;
+
     if (!bounty) {
-      return res.status(404).json({ error: "No bounty found for this PR" });
+      // Even if no bounty, the agent might need the token for review-only mode
+      return res.json({ bounty: null, githubToken });
     }
 
-    return res.json({ bounty });
+    return res.json({ bounty, githubToken });
   } catch (err) {
     console.error("Get bounty for PR error:", err);
     return res.status(500).json({ error: "Failed to fetch bounty" });
@@ -282,7 +304,7 @@ router.post("/:id/mark-paid", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Missing bounty id" });
   }
 
-  if (agentSecret !== process.env.MAINTAINER_SECRET) {
+  if (agentSecret !== config.maintainerSecret) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 

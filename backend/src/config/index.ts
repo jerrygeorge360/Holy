@@ -24,4 +24,5 @@ export const config = {
   backendUrl: process.env.BACKEND_URL || "http://localhost:3001",
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
   shadeAgentUrl: process.env.SHADE_AGENT_URL || "http://localhost:3000",
+  maintainerSecret: process.env.MAINTAINER_SECRET || "lockmeup",
 };

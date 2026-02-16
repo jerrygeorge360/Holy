@@ -5,6 +5,7 @@ interface PostCommentRequest {
   repoFullName: string;
   prNumber: number;
   review: ReviewResult;
+  token: string;
 }
 
 function formatComment(review: ReviewResult): string {
@@ -37,9 +38,9 @@ function formatComment(review: ReviewResult): string {
 export async function postReviewComment(
   request: PostCommentRequest,
 ): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = request.token;
   if (!token) {
-    throw new Error("Missing GITHUB_TOKEN");
+    throw new Error("Missing GitHub token in request");
   }
 
   const [owner, repo] = request.repoFullName.split("/");
@@ -71,14 +72,15 @@ interface PayoutCommentRequest {
   repoFullName: string;
   prNumber: number;
   message: string;
+  token: string;
 }
 
 export async function postPayoutComment(
   request: PayoutCommentRequest,
 ): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = request.token;
   if (!token) {
-    throw new Error("Missing GITHUB_TOKEN");
+    throw new Error("Missing GitHub token in request");
   }
 
   const [owner, repo] = request.repoFullName.split("/");

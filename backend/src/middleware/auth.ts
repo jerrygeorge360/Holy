@@ -20,6 +20,12 @@ const getTokenFromRequest = (req: Request): string | null => {
 
 // Protect routes that require login
 export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  // Allow system-level access from Shade Agent
+  const agentSecret = req.header("x-agent-secret");
+  if (agentSecret && agentSecret === config.maintainerSecret) {
+    return next();
+  }
+
   const token = getTokenFromRequest(req);
   if (!token) {
     return res.status(401).json({ error: "Unauthorized" });

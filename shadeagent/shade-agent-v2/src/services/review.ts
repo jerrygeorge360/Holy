@@ -23,6 +23,7 @@ interface ReviewRequest {
   diff: string;
   repoFullName: string;
   metadata: PullRequestMetadata;
+  criteria?: string;
 }
 
 const DEFAULT_CRITERIA =
@@ -88,7 +89,7 @@ function safeJsonParse(raw: string): ReviewResult {
 export async function reviewPullRequest(
   request: ReviewRequest,
 ): Promise<ReviewResult> {
-  const criteria = getCriteria(request.repoFullName) || DEFAULT_CRITERIA;
+  const criteria = request.criteria || getCriteria(request.repoFullName) || DEFAULT_CRITERIA;
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
@@ -101,7 +102,7 @@ export async function reviewPullRequest(
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama-3.1-70b-versatile",
+        model: "llama-3.3-70b-versatile",
         temperature: 0.2,
         messages: [
           {
@@ -126,8 +127,11 @@ export async function reviewPullRequest(
     }
 
     return safeJsonParse(content);
-  } catch (error) {
-    console.error("Failed to generate review:", error);
+  } catch (error: any) {
+    if (error.response) {
+      console.error("Groq API Error Details:", JSON.stringify(error.response.data, null, 2));
+    }
+    console.error("Failed to generate review:", error.message);
     throw error;
   }
 }

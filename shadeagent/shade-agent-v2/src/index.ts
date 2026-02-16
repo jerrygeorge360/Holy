@@ -45,6 +45,12 @@ async function start() {
 
   const app = express();
 
+  // Request logger for debugging
+  app.use((req, _res, next) => {
+    console.log(`Incoming request: ${req.method} ${req.url}`);
+    next();
+  });
+
   app.use(
     "/api/webhook",
     express.raw({ type: "application/json" }),
@@ -77,6 +83,12 @@ async function start() {
 
   app.use(criteriaRouter);
   app.use(bountyRouter);
+
+  // Catch-all 404 handler
+  app.use((req, res) => {
+    console.warn(`404 Not Found: ${req.method} ${req.url}`);
+    res.status(404).json({ error: "Not Found", path: req.url });
+  });
 
   console.log("Shade agent initialized:", agent.accountId());
   console.log("Agent registration handled by shade-agent-js");
