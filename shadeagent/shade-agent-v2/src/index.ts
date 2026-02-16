@@ -5,6 +5,8 @@ import webhookRouter from "./routes/webhook";
 import { criteriaRouter } from "./store/criteria";
 import bountyRouter from "./routes/bounty";
 import { getPayoutStats } from "./store/payoutLog";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 
 if (process.env.NODE_ENV !== "production") {
   dotenv.config();
@@ -50,6 +52,16 @@ async function start() {
   );
   app.use(express.json());
 
+  /**
+   * @swagger
+   * /api/health:
+   *   get:
+   *     summary: Check agent health and status
+   *     tags: [Health]
+   *     responses:
+   *       200:
+   *         description: Agent status and payout stats
+   */
   app.get("/api/health", (_req, res) => {
     const payouts = getPayoutStats();
     res.json({
@@ -59,6 +71,9 @@ async function start() {
       payouts,
     });
   });
+
+  // Swagger documentation
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
   app.use(criteriaRouter);
   app.use(bountyRouter);

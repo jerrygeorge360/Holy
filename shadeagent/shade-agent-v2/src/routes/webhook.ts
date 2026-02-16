@@ -28,6 +28,41 @@ function verifySignature(rawBody: Buffer, signatureHeader?: string): boolean {
   }
 }
 
+/**
+ * @swagger
+ * /api/webhook:
+ *   post:
+ *     summary: GitHub Webhook Listener
+ *     description: Receives pull_request events from GitHub. Requires x-hub-signature-256 for verification.
+ *     tags: [Webhook]
+ *     parameters:
+ *       - in: header
+ *         name: x-hub-signature-256
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: header
+ *         name: x-github-event
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [pull_request]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Event processed or ignored
+ *       400:
+ *         description: Invalid JSON or missing data
+ *       401:
+ *         description: Invalid signature
+ *       500:
+ *         description: Processing failed
+ */
 router.post("/", async (req: Request, res: Response) => {
   const signature = req.header("x-hub-signature-256");
   const event = req.header("x-github-event");

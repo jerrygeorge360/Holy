@@ -12,6 +12,25 @@ export function setCriteria(repoFullName: string, criteria: string): void {
 
 export const criteriaRouter = express.Router();
 
+/**
+ * @swagger
+ * /api/criteria:
+ *   get:
+ *     summary: Get review criteria for a repository
+ *     tags: [Criteria]
+ *     parameters:
+ *       - in: query
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: octocat/hello-world
+ *     responses:
+ *       200:
+ *         description: Criteria record
+ *       400:
+ *         description: repo query parameter required
+ */
 criteriaRouter.get("/api/criteria", (req: Request, res: Response) => {
   const { repo } = req.query;
 
@@ -23,6 +42,38 @@ criteriaRouter.get("/api/criteria", (req: Request, res: Response) => {
   return res.json({ repo, criteria: criteria || null });
 });
 
+/**
+ * @swagger
+ * /api/criteria:
+ *   post:
+ *     summary: Save review criteria for a repository
+ *     tags: [Criteria]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - repo
+ *               - criteria
+ *               - secret
+ *             properties:
+ *               repo:
+ *                 type: string
+ *                 example: octocat/hello-world
+ *               criteria:
+ *                 type: string
+ *               secret:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Criteria saved
+ *       400:
+ *         description: Missing fields
+ *       401:
+ *         description: Invalid secret
+ */
 criteriaRouter.post("/api/criteria", (req: Request, res: Response) => {
   const { repo, criteria, secret } = req.body || {};
 

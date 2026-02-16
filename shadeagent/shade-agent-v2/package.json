@@ -19,11 +19,15 @@
     "ethers": "^6.11.1",
     "express": "^5.2.1",
     "hono": "^4.8.4",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "tsx": "^4.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^20.0.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "typescript": "^5.0.0"
   }
 }
