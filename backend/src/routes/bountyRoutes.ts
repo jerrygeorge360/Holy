@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { config } from "../config/index.js";
 import { prisma } from "../../lib/prisma.js";
+import { requireAgentAuth, requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -46,7 +47,7 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.post("/attach", async (req: Request, res: Response) => {
+router.post("/attach", requireAuth, async (req: Request, res: Response) => {
   const { repo, issueNumber, prNumber, amount } = req.body || {};
 
   if (!req.authUserId) {
@@ -134,7 +135,18 @@ router.post("/attach", async (req: Request, res: Response) => {
  *         description: Shared secret for agent-only access
  *     responses:
  *       200:
- *         description: Bounty data for the PR
+ *         description: Bounty data and repo owner's GitHub token (if authorized)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 bounty:
+ *                   $ref: '#/components/schemas/Bounty'
+ *                 githubToken:
+ *                   type: string
+ *                   description: The GitHub access token of the repository owner.
+ *                   nullable: true
  *       401:
  *         description: Unauthorized
  *       404:
@@ -147,14 +159,21 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
   const fullName = `${owner}/${repo}`;
   const agentSecret = req.header("x-agent-secret");
 
-  if (!req.authUserId && agentSecret !== process.env.MAINTAINER_SECRET) {
+  if (!req.authUserId && agentSecret !== config.maintainerSecret) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
     const repository = await prisma.repository.findUnique({
       where: { fullName },
-      select: { id: true },
+      select: {
+        id: true,
+        owner: {
+          select: {
+            githubToken: true
+          }
+        }
+      },
     });
 
     if (!repository) {
@@ -169,11 +188,18 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
       },
     });
 
+    // We return the githubToken only if requested by the agent with the secret
+    const githubToken = agentSecret === config.maintainerSecret ? repository.owner?.githubToken : null;
+
     if (!bounty) {
+      // Restore 404 for standard users. Agent can still get the token even if no bounty.
+      if (agentSecret === config.maintainerSecret) {
+        return res.json({ bounty: null, githubToken });
+      }
       return res.status(404).json({ error: "No bounty found for this PR" });
     }
 
-    return res.json({ bounty });
+    return res.json({ bounty, githubToken });
   } catch (err) {
     console.error("Get bounty for PR error:", err);
     return res.status(500).json({ error: "Failed to fetch bounty" });
@@ -211,7 +237,7 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
  *       500:
  *         description: Internal server error
  */
-router.get("/:owner/:repo", async (req: Request, res: Response) => {
+router.get("/:owner/:repo", requireAuth, async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
 
@@ -273,17 +299,12 @@ router.get("/:owner/:repo", async (req: Request, res: Response) => {
  *       500:
  *         description: Internal server error
  */
-router.post("/:id/mark-paid", async (req: Request, res: Response) => {
+router.post("/:id/mark-paid", requireAgentAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
-  const agentSecret = req.header("x-agent-secret");
 
   const bountyId = Array.isArray(id) ? id[0] : id;
   if (!bountyId) {
     return res.status(400).json({ error: "Missing bounty id" });
-  }
-
-  if (agentSecret !== process.env.MAINTAINER_SECRET) {
-    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
@@ -343,7 +364,7 @@ router.post("/:id/mark-paid", async (req: Request, res: Response) => {
  *       500:
  *         description: Internal server error
  */
-router.post("/release", async (req: Request, res: Response) => {
+router.post("/release", requireAuth, async (req: Request, res: Response) => {
   const { repo, contributorWallet, prNumber, amount } = req.body;
 
   if (!req.authUserId) {
@@ -382,7 +403,7 @@ router.post("/release", async (req: Request, res: Response) => {
           contributorWallet,
           prNumber,
           amount,
-          secret: process.env.MAINTAINER_SECRET,
+          secret: config.maintainerSecret,
         }),
       }
     );
@@ -416,7 +437,7 @@ router.post("/release", async (req: Request, res: Response) => {
  *       503:
  *         description: Agent service unavailable
  */
-router.get("/history", async (req: Request, res: Response) => {
+router.get("/history", requireAuth, async (req: Request, res: Response) => {
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
   }

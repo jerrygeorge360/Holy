@@ -1,4 +1,6 @@
 import axios from "axios";
+import http from "http";
+import https from "https";
 import { getCriteria } from "../store/criteria";
 
 export interface PullRequestMetadata {
@@ -23,6 +25,7 @@ interface ReviewRequest {
   diff: string;
   repoFullName: string;
   metadata: PullRequestMetadata;
+  criteria?: string;
 }
 
 const DEFAULT_CRITERIA =
@@ -88,20 +91,20 @@ function safeJsonParse(raw: string): ReviewResult {
 export async function reviewPullRequest(
   request: ReviewRequest,
 ): Promise<ReviewResult> {
-  const criteria = getCriteria(request.repoFullName) || DEFAULT_CRITERIA;
-  const apiKey = process.env.GROQ_API_KEY;
+  const criteria = request.criteria || getCriteria(request.repoFullName) || DEFAULT_CRITERIA;
+  const apiKey = process.env.NEAR_AI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing GROQ_API_KEY");
+    throw new Error("Missing NEAR_AI_API_KEY");
   }
 
   const prompt = buildPrompt(request.diff, criteria, request.metadata);
 
   try {
     const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
+      "https://cloud-api.near.ai/v1/chat/completions",
       {
-        model: "llama-3.1-70b-versatile",
+        model: "openai/gpt-5.2",
         temperature: 0.2,
         messages: [
           {
@@ -117,17 +120,21 @@ export async function reviewPullRequest(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
+        timeout: 90000,
       },
     );
 
     const content = response.data?.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("No content returned from Groq");
+      throw new Error("No content returned from Near AI");
     }
 
     return safeJsonParse(content);
-  } catch (error) {
-    console.error("Failed to generate review:", error);
+  } catch (error: any) {
+    if (error.response) {
+      console.error("Near AI API Error Details:", JSON.stringify(error.response.data, null, 2));
+    }
+    console.error("Failed to generate review:", error.message);
     throw error;
   }
 }

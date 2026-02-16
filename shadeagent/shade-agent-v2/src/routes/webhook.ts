@@ -4,6 +4,7 @@ import axios from "axios";
 import { reviewPullRequest } from "../services/review";
 import { postPayoutComment, postReviewComment } from "../services/github";
 import { releaseBounty } from "../services/bounty";
+import { getCriteria } from "../store/criteria";
 
 const router = express.Router();
 
@@ -33,7 +34,11 @@ function verifySignature(rawBody: Buffer, signatureHeader?: string): boolean {
  * /api/webhook:
  *   post:
  *     summary: GitHub Webhook Listener
- *     description: Receives pull_request events from GitHub. Requires x-hub-signature-256 for verification.
+ *     description: |
+ *       Receives pull request events from GitHub.
+ *       In the "Automated Continuation" flow, this endpoint coordinates with the Backend
+ *       to fetch the repository owner's OAuth token for diff retrieval and commenting.
+ *       Requires x-hub-signature-256 for verification.
  *     tags: [Webhook]
  *     parameters:
  *       - in: header
@@ -118,10 +123,30 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   try {
-    const githubToken = process.env.GITHUB_TOKEN;
-    if (!githubToken) {
-      throw new Error("Missing GITHUB_TOKEN");
+    const backendUrl = process.env.BACKEND_URL;
+    const agentSecret = process.env.MAINTAINER_SECRET;
+
+    if (!backendUrl || !agentSecret) {
+      console.error("Missing BACKEND_URL or MAINTAINER_SECRET");
+      return res.status(500).json({ error: "Missing backend configuration" });
     }
+
+    // Fetch bounty and owner token from backend
+    const [owner, name] = repoFullName.split("/");
+    const bountyResponse = await axios.get(
+      `${backendUrl}/api/bounty/${owner}/${name}/pr/${prNumber}`,
+      { headers: { "x-agent-secret": agentSecret } },
+    );
+
+    const { bounty, githubToken } = bountyResponse.data;
+    console.info(`[Step 1] Retrieved backend data. Bounty: ${bounty ? "Yes" : "No"}, Token: ${githubToken ? "Yes" : "No"}`);
+
+    if (!githubToken) {
+      console.error("Failed to retrieve githubToken from backend");
+      return res.status(424).json({ error: "Failed Dependency: Missing repository owner permissions" });
+    }
+
+    console.info(`[Step 2] Fetching diff for PR #${prNumber} from ${diffUrl}`);
 
     const diffResponse = await axios.get(diffUrl, {
       headers: {
@@ -131,61 +156,50 @@ router.post("/", async (req: Request, res: Response) => {
       responseType: "text",
     });
 
-    const diff = diffResponse.data as string;
+    let diff = diffResponse.data as string;
+    if (diff.length > 50000) {
+      if (process.env.DEBUG === "true") {
+        console.warn(`Diff size too large (${diff.length} chars). Truncating to 50000.`);
+      }
+      diff = diff.slice(0, 50000) + "\n\n[Diff truncated due to size]";
+    }
+    console.info(`[Step 3] Diff retrieved (${diff.length} chars).`);
 
     if (action === "closed" && pr?.merged) {
-      const backendUrl = process.env.BACKEND_URL;
-      const agentSecret = process.env.MAINTAINER_SECRET;
-
-      if (!backendUrl || !agentSecret) {
-        console.error("Missing BACKEND_URL or MAINTAINER_SECRET");
-        return res.status(500).json({ error: "Missing backend configuration" });
+      if (!bounty?.amount) {
+        return res.status(200).json({ status: "no-bounty-for-merge" });
       }
 
-      try {
-        const [owner, name] = repoFullName.split("/");
-        const bountyResponse = await axios.get(
-          `${backendUrl}/api/bounty/${owner}/${name}/pr/${prNumber}`,
+      const contributorWallet =
+        process.env.TEST_CONTRIBUTOR_WALLET || contributor;
+
+      const payoutResult = await releaseBounty({
+        repoFullName,
+        contributorWallet,
+        prNumber,
+        amount: String(bounty.amount),
+      });
+
+      const message = payoutResult.success
+        ? `✅ Bounty released: ${bounty.amount} NEAR\nTx: ${payoutResult.txHash || ""}`
+        : `❌ Bounty release failed: ${payoutResult.error || "Unknown error"}`;
+
+      await postPayoutComment({
+        repoFullName,
+        prNumber,
+        message,
+        token: githubToken,
+      });
+
+      if (payoutResult.success && bounty?.id) {
+        await axios.post(
+          `${backendUrl}/api/bounty/${bounty.id}/mark-paid`,
+          {},
           { headers: { "x-agent-secret": agentSecret } },
         );
-
-        const bounty = bountyResponse.data?.bounty;
-        if (!bounty?.amount) {
-          return res.status(200).json({ status: "no-bounty" });
-        }
-
-        const contributorWallet =
-          process.env.TEST_CONTRIBUTOR_WALLET || contributor;
-
-        const payoutResult = await releaseBounty({
-          repoFullName,
-          contributorWallet,
-          prNumber,
-          amount: String(bounty.amount),
-        });
-
-        const message = payoutResult.success
-          ? `✅ Bounty released: ${bounty.amount} NEAR\nTx: ${payoutResult.txHash || ""}`
-          : `❌ Bounty release failed: ${payoutResult.error || "Unknown error"}`;
-
-        await postPayoutComment({
-          repoFullName,
-          prNumber,
-          message,
-        });
-
-        if (payoutResult.success && bounty?.id) {
-          await axios.post(
-            `${backendUrl}/api/bounty/${bounty.id}/mark-paid`,
-            {},
-            { headers: { "x-agent-secret": agentSecret } },
-          );
-        }
-      } catch (error) {
-        console.error("Failed to release bounty on merge:", error);
       }
 
-      return res.status(200).json({ status: "processed" });
+      return res.status(200).json({ status: "processed-merge" });
     }
 
     const reviewResult = await reviewPullRequest({
@@ -200,19 +214,27 @@ router.post("/", async (req: Request, res: Response) => {
         headBranch,
         diffUrl,
       },
+      criteria: await getCriteria(repoFullName) || "Standard code review.",
     });
+    console.info(`[Step 4] AI Review generated. Score: ${reviewResult.score}`);
 
     await postReviewComment({
       repoFullName,
       prNumber,
       review: reviewResult,
+      token: githubToken,
     });
-
-    return res.status(200).json({ status: "processed" });
-  } catch (error) {
-    console.error("Failed to process webhook:", error);
-    return res.status(500).json({ error: "Processing failed" });
+    console.info(`[Step 5] Successfully posted review comment to PR #${prNumber}`);
+  } catch (error: any) {
+    console.error("Failed to process webhook:", error.response?.data || error.message);
+    const status = error.response?.status === 404 ? 404 : 500;
+    return res.status(status).json({
+      error: "Webhook processing failed",
+      details: error.response?.data?.error || error.message
+    });
   }
+
+  return res.status(200).json({ status: "processed" });
 });
 
 export default router;

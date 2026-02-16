@@ -22,6 +22,28 @@ const options: swaggerJSDoc.Options = {
                     bearerFormat: "JWT",
                 },
             },
+            schemas: {
+                Bounty: {
+                    type: "object",
+                    properties: {
+                        id: { type: "string", format: "uuid" },
+                        amount: { type: "string" },
+                        status: { type: "string", enum: ["open", "paid"] },
+                        prNumber: { type: "number", nullable: true },
+                        issueNumber: { type: "number", nullable: true },
+                        repoId: { type: "string", format: "uuid" },
+                        createdAt: { type: "string", format: "date-time" },
+                    }
+                },
+                Repository: {
+                    type: "object",
+                    properties: {
+                        id: { type: "string", format: "uuid" },
+                        fullName: { type: "string" },
+                        nearWallet: { type: "string", nullable: true },
+                    }
+                }
+            }
         },
     },
     apis: ["./src/routes/*.ts"], // Path to the API docs
