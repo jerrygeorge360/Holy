@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { config } from "../config/index.js";
 import { prisma } from "../../lib/prisma.js";
-import { requireAgentAuth } from "../middleware/auth.js";
+import { requireAgentAuth, requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -47,7 +47,7 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.post("/attach", async (req: Request, res: Response) => {
+router.post("/attach", requireAuth, async (req: Request, res: Response) => {
   const { repo, issueNumber, prNumber, amount } = req.body || {};
 
   if (!req.authUserId) {
@@ -237,7 +237,7 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
  *       500:
  *         description: Internal server error
  */
-router.get("/:owner/:repo", async (req: Request, res: Response) => {
+router.get("/:owner/:repo", requireAuth, async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
 
@@ -364,7 +364,7 @@ router.post("/:id/mark-paid", requireAgentAuth, async (req: Request, res: Respon
  *       500:
  *         description: Internal server error
  */
-router.post("/release", async (req: Request, res: Response) => {
+router.post("/release", requireAuth, async (req: Request, res: Response) => {
   const { repo, contributorWallet, prNumber, amount } = req.body;
 
   if (!req.authUserId) {
@@ -437,7 +437,7 @@ router.post("/release", async (req: Request, res: Response) => {
  *       503:
  *         description: Agent service unavailable
  */
-router.get("/history", async (req: Request, res: Response) => {
+router.get("/history", requireAuth, async (req: Request, res: Response) => {
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
   }

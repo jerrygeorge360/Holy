@@ -35,8 +35,8 @@ app.use("/auth", authRouter);
 // Swagger documentation
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// API routes (all authenticated)
-app.use("/api", requireAuth, routes);
+// API routes (authentication handled per-route)
+app.use("/api", routes);
 
 app.use(errorHandler);
 
