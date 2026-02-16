@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { config } from "../config/index.js";
 import { prisma } from "../../lib/prisma.js";
+import { requireAgentAuth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -188,11 +189,14 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
     });
 
     // We return the githubToken only if requested by the agent with the secret
-    const githubToken = agentSecret === process.env.MAINTAINER_SECRET ? repository.owner?.githubToken : null;
+    const githubToken = agentSecret === config.maintainerSecret ? repository.owner?.githubToken : null;
 
     if (!bounty) {
-      // Even if no bounty, the agent might need the token for review-only mode
-      return res.json({ bounty: null, githubToken });
+      // Restore 404 for standard users. Agent can still get the token even if no bounty.
+      if (agentSecret === config.maintainerSecret) {
+        return res.json({ bounty: null, githubToken });
+      }
+      return res.status(404).json({ error: "No bounty found for this PR" });
     }
 
     return res.json({ bounty, githubToken });
@@ -295,17 +299,12 @@ router.get("/:owner/:repo", async (req: Request, res: Response) => {
  *       500:
  *         description: Internal server error
  */
-router.post("/:id/mark-paid", async (req: Request, res: Response) => {
+router.post("/:id/mark-paid", requireAgentAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
-  const agentSecret = req.header("x-agent-secret");
 
   const bountyId = Array.isArray(id) ? id[0] : id;
   if (!bountyId) {
     return res.status(400).json({ error: "Missing bounty id" });
-  }
-
-  if (agentSecret !== config.maintainerSecret) {
-    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
@@ -404,7 +403,7 @@ router.post("/release", async (req: Request, res: Response) => {
           contributorWallet,
           prNumber,
           amount,
-          secret: process.env.MAINTAINER_SECRET,
+          secret: config.maintainerSecret,
         }),
       }
     );

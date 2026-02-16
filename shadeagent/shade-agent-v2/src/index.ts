@@ -46,10 +46,12 @@ async function start() {
   const app = express();
 
   // Request logger for debugging
-  app.use((req, _res, next) => {
-    console.log(`Incoming request: ${req.method} ${req.url}`);
-    next();
-  });
+  if (process.env.DEBUG === "true") {
+    app.use((req, _res, next) => {
+      console.log(`Incoming request: ${req.method} ${req.url}`);
+      next();
+    });
+  }
 
   app.use(
     "/api/webhook",

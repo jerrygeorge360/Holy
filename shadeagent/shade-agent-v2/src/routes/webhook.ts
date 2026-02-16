@@ -142,7 +142,7 @@ router.post("/", async (req: Request, res: Response) => {
 
     if (!githubToken) {
       console.error("Failed to retrieve githubToken from backend");
-      return res.status(500).json({ error: "Unauthorized: Missing GitHub permissions from owner" });
+      return res.status(424).json({ error: "Failed Dependency: Missing repository owner permissions" });
     }
 
     const diffResponse = await axios.get(diffUrl, {
@@ -153,7 +153,13 @@ router.post("/", async (req: Request, res: Response) => {
       responseType: "text",
     });
 
-    const diff = diffResponse.data as string;
+    let diff = diffResponse.data as string;
+    if (diff.length > 50000) {
+      if (process.env.DEBUG === "true") {
+        console.warn(`Diff size too large (${diff.length} chars). Truncating to 50000.`);
+      }
+      diff = diff.slice(0, 50000) + "\n\n[Diff truncated due to size]";
+    }
 
     if (action === "closed" && pr?.merged) {
       if (!bounty?.amount) {
@@ -213,9 +219,13 @@ router.post("/", async (req: Request, res: Response) => {
       review: reviewResult,
       token: githubToken,
     });
-  } catch (error) {
-    console.error("Failed to process webhook:", error);
-    return res.status(500).json({ error: "Webhook processing failed" });
+  } catch (error: any) {
+    console.error("Failed to process webhook:", error.response?.data || error.message);
+    const status = error.response?.status === 404 ? 404 : 500;
+    return res.status(status).json({
+      error: "Webhook processing failed",
+      details: error.response?.data?.error || error.message
+    });
   }
 
   return res.status(200).json({ status: "processed" });

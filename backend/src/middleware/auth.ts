@@ -20,12 +20,6 @@ const getTokenFromRequest = (req: Request): string | null => {
 
 // Protect routes that require login
 export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  // Allow system-level access from Shade Agent
-  const agentSecret = req.header("x-agent-secret");
-  if (agentSecret && agentSecret === config.maintainerSecret) {
-    return next();
-  }
-
   const token = getTokenFromRequest(req);
   if (!token) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -44,4 +38,23 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
     console.error("JWT verification failed:", err);
     return res.status(401).json({ error: "Unauthorized" });
   }
+};
+
+/**
+ * Strict Agent-Only Authentication
+ * Bypasses JWT check but requires valid x-agent-secret
+ */
+export const requireAgentAuth = (req: Request, res: Response, next: NextFunction) => {
+  const agentSecret = req.header("x-agent-secret");
+
+  if (!config.maintainerSecret) {
+    console.error("MAINTAINER_SECRET not configured on server");
+    return res.status(500).json({ error: "Agent authentication not configured" });
+  }
+
+  if (agentSecret && agentSecret === config.maintainerSecret) {
+    return next();
+  }
+
+  return res.status(403).json({ error: "Forbidden: Invalid agent secret" });
 };
