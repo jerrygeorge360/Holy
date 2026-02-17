@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
+import cors from "cors";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import routes from "./routes/index.js";
 import authRouter from "./routes/authRoutes.js";
@@ -15,6 +16,12 @@ const app = express();
 
 // Security headers
 app.use(helmet());
+app.use(
+  cors({
+    origin: [config.frontendUrl, "http://localhost:3000", "http://localhost:3002"],
+    credentials: true,
+  })
+);
 
 // Compression middleware
 app.use(compression());
