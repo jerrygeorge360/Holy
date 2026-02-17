@@ -2,9 +2,17 @@
 import Button from "@/shared/Button";
 import { Github, Code2, Shield, Zap, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";
+import { API_BASE_URL } from "@/lib/config";
 
 export default function Home() {
   const router = useRouter();
+  const { user, isLoading } = useAuth();
+
+  const handleSignIn = () => {
+    window.location.href = `${API_BASE_URL}/auth/github`;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900">
       {/* Header */}
@@ -13,16 +21,25 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Code2 className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
             <span className="font-semibold text-lg md:text-xl text-white">
-              CodeGuard AI
+              Holy
             </span>
           </div>
-          <div
-            onClick={() => router.push("/dashboard")}
-            className="grid place-content-center"
-          >
-            <Button className="text-slate-300 hover:text-white rounded-md text-sm md:text-base px-3 py-2 md:px-4 md:py-2">
-              Dashboard
-            </Button>
+          <div className="grid place-content-center">
+            {!isLoading && user ? (
+              <Button
+                onClick={() => router.push("/dashboard")}
+                className="text-slate-300 hover:text-white rounded-md text-sm md:text-base px-3 py-2 md:px-4 md:py-2"
+              >
+                Dashboard
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSignIn}
+                className="text-slate-300 hover:text-white rounded-md text-sm md:text-base px-3 py-2 md:px-4 md:py-2"
+              >
+                Sign In
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -33,16 +50,19 @@ export default function Home() {
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 md:mb-6">
             AI-Powered Code Reviews
             <span className="block text-blue-500 mt-2">
-              For Every Pull Request
+              With NEAR Bounty Payouts
             </span>
           </h1>
           <p className="text-base md:text-xl text-slate-300 mb-6 md:mb-8 max-w-2xl mx-auto px-4">
-            Automatically catch bugs, security vulnerabilities, and performance
-            issues before they reach production. CodeGuard AI reviews your code
-            in seconds.
+            Automatically review pull requests, catch security issues, and
+            reward contributors with instant NEAR token payouts when PRs are
+            merged.
           </p>
           <div className="grid place-content-center px-4">
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 md:px-8 md:py-6 text-base md:text-lg rounded-[15px] w-full sm:w-auto">
+            <Button
+              onClick={handleSignIn}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 md:px-8 md:py-6 text-base md:text-lg rounded-[15px] w-full sm:w-auto"
+            >
               <Github className="w-4 h-4 md:w-5 md:h-5" />
               Sign in with GitHub
             </Button>
@@ -74,11 +94,11 @@ export default function Home() {
               <Zap className="w-5 h-5 md:w-6 md:h-6 text-green-500" />
             </div>
             <h3 className="text-lg md:text-xl font-semibold text-white mb-2">
-              Performance Optimization
+              NEAR Bounties
             </h3>
             <p className="text-sm md:text-base text-slate-400">
-              Identify performance bottlenecks, inefficient algorithms, and
-              unnecessary re-renders before deployment.
+              Attach NEAR token bounties to GitHub issues. Contributors get paid
+              automatically when their PR is merged.
             </p>
           </div>
 
@@ -87,11 +107,11 @@ export default function Home() {
               <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
             </div>
             <h3 className="text-lg md:text-xl font-semibold text-white mb-2">
-              Best Practices
+              Custom Criteria
             </h3>
             <p className="text-sm md:text-base text-slate-400">
-              Enforce coding standards, catch common mistakes, and maintain
-              consistency across your entire codebase.
+              Define custom review guidelines per repository. The AI enforces
+              your team&apos;s coding standards on every PR.
             </p>
           </div>
         </div>
@@ -103,9 +123,9 @@ export default function Home() {
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-8 md:mb-12">How It Works</h2>
           <div className="space-y-6 md:space-y-8 text-left">
             {[
-              { num: 1, title: "Connect Your Repository", desc: "Link your GitHub repositories in just a few clicks" },
-              { num: 2, title: "Automatic Review", desc: "Our AI reviews every pull request automatically" },
-              { num: 3, title: "Get Instant Feedback", desc: "Receive detailed feedback and suggestions within seconds" }
+              { num: 1, title: "Connect Your Repository", desc: "Link your GitHub repo and install a webhook in one click" },
+              { num: 2, title: "Set a Bounty", desc: "Attach NEAR tokens to issues to attract contributors" },
+              { num: 3, title: "Merge & Pay", desc: "When a PR is merged, the contributor gets paid from the smart contract" }
             ].map((step) => (
               <div key={step.num} className="flex gap-3 md:gap-4">
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 text-white font-semibold text-sm md:text-base">
@@ -129,13 +149,16 @@ export default function Home() {
       <section className="container mx-auto px-4 py-12 md:py-20 border-t border-slate-800">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 md:mb-4">
-            Ready to improve your code quality?
+            Ready to reward your contributors?
           </h2>
           <p className="text-base md:text-lg text-slate-300 mb-6 md:mb-8">
-            Join thousands of developers using CodeGuard AI
+            Connect your repo, set a bounty, and let Holy handle the rest.
           </p>
           <div className="grid place-content-center px-4">
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 md:px-8 md:py-6 text-base md:text-lg rounded-[15px] w-full sm:w-auto">
+            <Button
+              onClick={handleSignIn}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 md:px-8 md:py-6 text-base md:text-lg rounded-[15px] w-full sm:w-auto"
+            >
               <Github className="w-4 h-4 md:w-5 md:h-5" />
               Get Started for Free
             </Button>
@@ -146,7 +169,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-slate-800 mt-12 md:mt-20">
         <div className="container mx-auto px-4 py-6 md:py-8 text-center text-slate-400 text-xs md:text-sm">
-          © 2026 CodeGuard AI. All rights reserved.
+          &copy; 2026 Holy. All rights reserved.
         </div>
       </footer>
     </div>

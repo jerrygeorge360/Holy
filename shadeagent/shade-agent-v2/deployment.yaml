@@ -19,7 +19,7 @@ agent_contract:
   deploy_custom:
     enabled: true
     # Amount to fund the agent contract with in NEAR
-    funding_amount: 5
+    funding_amount: 10
     # If true the key for contract account will be deleted after deployment locking it
     delete_key: false
 
@@ -99,7 +99,7 @@ build_docker_image:
 # Only applicable if the environment is TEE
 deploy_to_phala:
   enabled: true
-  app_name: holy
+  app_name: holy-bounty-agent
   env_file_path: ./.env
 
 # Helper command to whitelist an agent for local mode

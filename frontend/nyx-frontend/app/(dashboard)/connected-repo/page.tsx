@@ -3,73 +3,83 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/shared/Button";
-import { Github, Search, ChevronRight, ChevronLeft } from "lucide-react";
-
-// Mock GitHub repositories
-const mockGitHubRepos = [
-  {
-    id: "1",
-    name: "analytics-dashboard",
-    owner: "acme-corp",
-    language: "TypeScript",
-    private: false,
-    stars: 145,
-  },
-  {
-    id: "2",
-    name: "payment-service",
-    owner: "acme-corp",
-    language: "Go",
-    private: true,
-    stars: 89,
-  },
-  {
-    id: "3",
-    name: "notification-worker",
-    owner: "acme-corp",
-    language: "Python",
-    private: true,
-    stars: 56,
-  },
-  {
-    id: "4",
-    name: "docs-website",
-    owner: "acme-corp",
-    language: "JavaScript",
-    private: false,
-    stars: 234,
-  },
-  {
-    id: "5",
-    name: "infrastructure",
-    owner: "acme-corp",
-    language: "HCL",
-    private: true,
-    stars: 23,
-  },
-];
+import {
+  Github,
+  ChevronRight,
+  ChevronLeft,
+  Loader2,
+  Wallet,
+} from "lucide-react";
+import { connectRepo, updateRepo, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function ConnectRepo() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [step, setStep] = useState(1);
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState("main");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [autoReview, setAutoReview] = useState(true);
-  const [notifyOnIssues, setNotifyOnIssues] = useState(true);
+  const [repoInput, setRepoInput] = useState("");
+  const [nearWallet, setNearWallet] = useState("");
+  const [connectedRepo, setConnectedRepo] = useState<{
+    fullName: string;
+    owner: string;
+    name: string;
+  } | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSavingWallet, setIsSavingWallet] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredRepos = mockGitHubRepos.filter(
-    (repo) =>
-      repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      repo.owner.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const handleConnect = async () => {
+    if (!repoInput.includes("/")) {
+      setError("Please enter a valid repo in the format owner/repo");
+      return;
+    }
+    setError(null);
+    setIsConnecting(true);
+    try {
+      const repo = await connectRepo(repoInput.trim());
+      const [owner, name] = repo.fullName.split("/");
+      setConnectedRepo({ fullName: repo.fullName, owner, name });
+      refreshUser();
+      setStep(2);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError("This repository is already connected.");
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError("Insufficient GitHub permissions. Make sure you have admin access to this repo.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to connect repository");
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
-  const selectedRepoData = mockGitHubRepos.find((r) => r.id === selectedRepo);
-
-  const handleConnect = () => {
-    setTimeout(() => {
+  const handleSaveWallet = async () => {
+    if (!connectedRepo) return;
+    if (!nearWallet.trim()) {
       router.push("/dashboard");
-    }, 500);
+      return;
+    }
+    setIsSavingWallet(true);
+    setError(null);
+    try {
+      const result = await updateRepo(connectedRepo.owner, connectedRepo.name, {
+        nearWallet: nearWallet.trim(),
+      });
+      // result is { message, nearWallet, contractRegistration } — not a Repository
+      if (result.message) {
+        refreshUser();
+        router.push("/dashboard");
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 503) {
+        setError("Could not register with the NEAR contract. The agent service may be down. Your wallet was not saved.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to save wallet");
+      }
+    } finally {
+      setIsSavingWallet(false);
+    }
   };
 
   return (
@@ -81,99 +91,85 @@ export default function ConnectRepo() {
             className={`flex items-center gap-1 md:gap-2 ${step >= 1 ? "text-blue-600" : "text-slate-400"}`}
           >
             <div
-              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${
-                step >= 1
+              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${step >= 1
                   ? "bg-blue-600 text-white"
                   : "bg-slate-200 text-slate-600"
-              }`}
+                }`}
             >
               1
             </div>
-            <span className="font-medium text-xs md:text-sm">Select Repository</span>
+            <span className="font-medium text-xs md:text-sm">
+              Connect Repository
+            </span>
           </div>
           <ChevronRight className="w-3 h-3 md:w-4 md:h-4 text-slate-400 shrink-0" />
           <div
             className={`flex items-center gap-1 md:gap-2 ${step >= 2 ? "text-blue-600" : "text-slate-400"}`}
           >
             <div
-              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${
-                step >= 2
+              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${step >= 2
                   ? "bg-blue-600 text-white"
                   : "bg-slate-200 text-slate-600"
-              }`}
+                }`}
             >
               2
             </div>
-            <span className="font-medium text-xs md:text-sm">Configure Settings</span>
+            <span className="font-medium text-xs md:text-sm">
+              Link NEAR Wallet
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Step 1: Select Repository */}
+      {/* Step 1: Enter Repository */}
       {step === 1 && (
         <div className="bg-white border border-slate-200 rounded-lg">
           <div className="p-4 md:p-6 border-b border-slate-200">
             <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 text-black">
-              Select a Repository
+              Connect a Repository
             </h2>
             <p className="text-xs md:text-sm text-slate-600">
-              Choose a repository to connect to CodeGuard AI
+              Enter the GitHub repository you want to connect to Holy
             </p>
           </div>
           <div className="p-4 md:p-6">
-            {/* Search */}
             <div className="mb-4">
+              <label
+                htmlFor="repo"
+                className="block text-xs md:text-sm font-medium mb-2 text-black"
+              >
+                Repository (owner/name)
+              </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
+                <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
                 <input
+                  id="repo"
                   type="text"
-                  placeholder="Search repositories..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 md:pl-9 pr-3 py-3 md:py-4 border text-black text-xs md:text-[12px] bg-gray-300 border-none rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="jerrygeorge360/my-project"
+                  value={repoInput}
+                  onChange={(e) => setRepoInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+                  className="w-full pl-8 md:pl-9 pr-3 py-3 md:py-4 border text-black text-xs md:text-sm bg-gray-100 border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Repository List */}
-            <div className="space-y-2 mb-4 md:mb-6 max-h-[400px] overflow-y-auto">
-              {filteredRepos.map((repo) => (
-                <div
-                  key={repo.id}
-                  onClick={() => setSelectedRepo(repo.id)}
-                  className={`p-3 md:p-4 border rounded-lg cursor-pointer transition-all ${
-                    selectedRepo === repo.id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <Github className="w-3 h-3 md:w-4 md:h-4 text-slate-600 shrink-0" />
-                        <span className="text-xs md:text-sm text-black font-bold truncate">
-                          {repo.owner}/{repo.name}
-                        </span>
-                        {repo.private && (
-                          <span className="px-1.5 md:px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 border border-slate-300 rounded-full shrink-0">
-                            Private
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm text-slate-600">
-                        <span>{repo.language}</span>
-                        <span>•</span>
-                        <span>⭐ {repo.stars}</span>
-                      </div>
-                    </div>
-                    {selectedRepo === repo.id && (
-                      <div className="w-4 h-4 md:w-5 md:h-5 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
-                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white rounded-full" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-xs md:text-sm text-red-800">{error}</p>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-4">
+              <h4 className="font-medium text-blue-900 mb-2 text-sm md:text-base">
+                What happens when you connect?
+              </h4>
+              <ul className="space-y-1 text-xs md:text-sm text-blue-800">
+                <li>- A webhook will be installed on the repository</li>
+                <li>- The Holy agent will start reviewing pull requests</li>
+                <li>- You can attach NEAR bounties to issues and PRs</li>
+              </ul>
             </div>
 
             {/* Actions */}
@@ -185,113 +181,78 @@ export default function ConnectRepo() {
                 Cancel
               </Button>
               <Button
-                onClick={() => setStep(2)}
-                disabled={!selectedRepo}
+                onClick={handleConnect}
+                disabled={!repoInput.trim() || isConnecting}
                 className="order-1 sm:order-2 w-full sm:w-auto gap-2 px-4 py-2 text-xs md:text-[12px] text-white rounded-md border bg-black disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Continue
-                <ChevronRight className="w-3 h-3 md:w-4 md:h-4" />
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    Connect
+                    <ChevronRight className="w-3 h-3 md:w-4 md:h-4" />
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Step 2: Configure Settings */}
-      {step === 2 && selectedRepoData && (
+      {/* Step 2: Link NEAR Wallet */}
+      {step === 2 && connectedRepo && (
         <div className="bg-white border border-slate-200 rounded-lg">
           <div className="p-4 md:p-6 border-b border-slate-200">
-            <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 text-black">Configure Repository</h2>
+            <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 text-black">
+              Link NEAR Wallet
+            </h2>
             <p className="text-xs md:text-sm text-slate-600">
-              Set up review settings for{" "}
-              <span className="font-medium">
-                {selectedRepoData.owner}/{selectedRepoData.name}
-              </span>
+              Set a NEAR wallet for bounty payouts on{" "}
+              <span className="font-medium">{connectedRepo.fullName}</span>
             </p>
           </div>
           <div className="p-4 md:p-6">
             <div className="space-y-4 md:space-y-6">
-              {/* Branch Selection */}
-              <div>
-                <label
-                  htmlFor="branch"
-                  className="block text-xs md:text-sm font-medium mb-2 text-black"
-                >
-                  Default Branch
-                </label>
-                <input
-                  id="branch"
-                  type="text"
-                  value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
-                  placeholder="main"
-                  className="w-full px-3 py-2 md:py-3 border text-black text-xs md:text-sm bg-gray-300 border-none rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs md:text-sm text-slate-600 mt-1">
-                  CodeGuard AI will review pull requests targeting this branch
+              {/* Success Banner */}
+              <div className="p-3 md:p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800 font-medium">
+                  Repository connected successfully! Webhook installed.
                 </p>
               </div>
 
-              {/* Review Settings */}
-              <div className="space-y-3 md:space-y-4">
-                <h4 className="font-medium text-sm md:text-base text-black">Review Settings</h4>
-
-                <div className="flex items-start gap-2 md:gap-3">
+              {/* Wallet Input */}
+              <div>
+                <label
+                  htmlFor="wallet"
+                  className="block text-xs md:text-sm font-medium mb-2 text-black"
+                >
+                  NEAR Wallet Address (optional)
+                </label>
+                <div className="relative">
+                  <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
                   <input
-                    type="checkbox"
-                    id="auto-review"
-                    checked={autoReview}
-                    onChange={(e) => setAutoReview(e.target.checked)}
-                    className="w-3 h-3 md:w-4 md:h-4 mt-0.5 md:mt-1 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 shrink-0"
+                    id="wallet"
+                    type="text"
+                    value={nearWallet}
+                    onChange={(e) => setNearWallet(e.target.value)}
+                    placeholder="your-name.testnet"
+                    className="w-full pl-8 md:pl-9 pr-3 py-3 md:py-4 border text-black text-xs md:text-sm bg-gray-100 border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <div className="flex-1 min-w-0">
-                    <label
-                      htmlFor="auto-review"
-                      className="block font-medium cursor-pointer text-sm md:text-base text-black"
-                    >
-                      Automatic PR Review
-                    </label>
-                    <p className="text-xs md:text-sm text-slate-600 mt-1">
-                      Automatically review all new pull requests
-                    </p>
-                  </div>
                 </div>
-
-                <div className="flex items-start gap-2 md:gap-3">
-                  <input
-                    type="checkbox"
-                    id="notify"
-                    checked={notifyOnIssues}
-                    onChange={(e) => setNotifyOnIssues(e.target.checked)}
-                    className="w-3 h-3 md:w-4 md:h-4 mt-0.5 md:mt-1 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <label
-                      htmlFor="notify"
-                      className="block font-medium cursor-pointer text-sm md:text-base text-black"
-                    >
-                      Notify on Critical Issues
-                    </label>
-                    <p className="text-xs md:text-sm text-slate-600 mt-1">
-                      Get notified when critical security or performance issues are found
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Info Box */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
-                <h4 className="font-medium text-blue-900 mb-2 text-sm md:text-base">
-                  What happens next?
-                </h4>
-                <ul className="space-y-1 text-xs md:text-sm text-blue-800">
-                  <li>• CodeGuard AI will be added to your repository</li>
-                  <li>• New pull requests will be automatically reviewed</li>
-                  <li>• You'll receive detailed feedback on every PR</li>
-                  <li>• Review history will be available in your dashboard</li>
-                </ul>
+                <p className="text-xs md:text-sm text-slate-600 mt-1">
+                  This wallet receives bounty payouts and registers your repo on the NEAR contract.
+                </p>
               </div>
             </div>
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-xs md:text-sm text-red-800">{error}</p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4 md:mt-6">
@@ -302,9 +263,21 @@ export default function ConnectRepo() {
                 <ChevronLeft className="w-3 h-3 md:w-4 md:h-4" />
                 Back
               </button>
-              <Button onClick={handleConnect} className="order-1 sm:order-2 w-full sm:w-auto gap-2 text-xs md:text-sm">
-                <Github className="w-3 h-3 md:w-4 md:h-4" />
-                Connect Repository
+              <Button
+                onClick={handleSaveWallet}
+                disabled={isSavingWallet}
+                className="order-1 sm:order-2 w-full sm:w-auto gap-2 text-xs md:text-sm text-white rounded-md border bg-black disabled:opacity-50"
+              >
+                {isSavingWallet ? (
+                  <>
+                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
+                    Registering on contract...
+                  </>
+                ) : nearWallet.trim() ? (
+                  "Save Wallet & Register"
+                ) : (
+                  "Skip & Go to Dashboard"
+                )}
               </Button>
             </div>
           </div>
