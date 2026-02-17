@@ -1,88 +1,87 @@
-# Shade Agent — Autonomous Code Review + Bounty Payouts
+# Holy Shade Agent: Autonomous AI & Blockchain Worker
 
-This agent listens for GitHub pull request events, performs automated code reviews using an LLM, posts review comments, and (when approved) releases NEAR token bounties to contributors. It runs as a Shade Agent using the NEAR Shade Agent Framework (`shade-agent-js`).
+This service is the autonomous heart of the Holy protocol. It sits within a Trusted Execution Environment (TEE) to securely manage private keys, review code using high-context LLMs, and handle bounty payouts on the NEAR blockchain.
 
-## What it does
+## Core Capabilities
 
-- **GitHub Webhook Listener**: Receives `pull_request` events and fetches the PR diff.
-- **Automated Review**: Sends diff + maintainer criteria to an LLM and returns a structured review.
-- **GitHub Commenting**: Posts the review back to the PR as a markdown comment.
-- **Bounty Payouts**: Releases a NEAR bounty on approved reviews and logs payout attempts.
-- **Criteria Management**: Maintainers can set custom review criteria per repo.
+- **Webhook Intelligence**: Listens for GitHub events (Pull Requests, Issues, Comments) and identifies actionable tasks.
+- **AI Code Review**: Scans PR diffs against repository-specific maintainer guidelines to provide automated, structured feedback.
+- **Bounty Management**: Detects bounty commands in GitHub comments and coordinates with the Holy Backend to sync states.
+- **Trustless Payouts**: Automatically releases NEAR tokens from the Holy smart contract to contributors when a PR is merged.
+- **Identity Mapping**: Detects and stores contributor NEAR wallets through slash commands in PR descriptions or comments.
 
-> Note: The AI never closes PRs. Maintainers decide whether to merge or close.
+## Feature Spotlight
 
-## Endpoints
+### GitHub Slash Commands
+The Shade Agent monitors comments for the following commands:
+- **/bounty <amount>**: Sets or updates the NEAR bounty on an issue.
+- **/link-wallet <near-id>**: Maps a GitHub user to their NEAR wallet for automated payouts.
 
-### Health
-- **GET** `/api/health`
-	- Returns agent status and payout stats.
+### Automated PR Linking
+When a Pull Request is opened, the Agent scans the description for issue references (e.g., "Fixes #123"). If a bounty exists on the referenced issue, the Agent automatically links that bounty to the PR and announces it to the contributor.
 
-### Webhook
-- **POST** `/api/webhook`
-	- GitHub webhook listener for `pull_request` events.
+### TEE Security
+When deployed to Phala TEE, the Agent provides:
+- **Key Isolation**: The sponsor keys and agent identities are shielded from the host machine.
+- **Tamper-Proof Execution**: Ensures that the review and payout logic haven't been modified.
 
-### Criteria
-- **POST** `/api/criteria`
-	- Body: `{ repo: string, criteria: string, secret: string }`
-	- Secured with `MAINTAINER_SECRET`.
+---
 
-### Bounty
-- **GET** `/api/bounty/:owner/:repo`
-	- Returns current bounty amount for the repo.
-- **POST** `/api/bounty/release`
-	- Body: `{ repo: string, contributorWallet: string, prNumber: number, secret: string }`
-	- Releases bounty manually for testing.
-- **GET** `/api/bounty/history`
-	- Returns in-memory payout attempts for this session.
+## API Reference
 
-## Environment Variables
+### Health & Stats
+- **GET /api/health**: Returns agent status, registration info, and aggregate payout statistics.
 
-Required:
+### Repository Management
+- **POST /api/repo/register**: Manually register a repository and its maintainer on the NEAR contract.
+  - Body: `{ "repo": "owner/repo", "maintainerNearId": "name.testnet" }`
 
-```
-AGENT_CONTRACT_ID=
-SPONSOR_ACCOUNT_ID=
-SPONSOR_PRIVATE_KEY=
+### Bounty Operations
+- **GET /api/bounty/:owner/:repo**: Fetch the current live bounty balance for a repository from the blockchain.
+- **POST /api/bounty/release**: Manually trigger a bounty payout (secured with MAINTAINER_SECRET).
+- **GET /api/bounty/history**: View the log of all payout attempts for the current session.
 
-GITHUB_TOKEN=
-GITHUB_WEBHOOK_SECRET=
-GROQ_API_KEY=
-MAINTAINER_SECRET=
+---
 
-TEST_CONTRIBUTOR_WALLET=contributor.testnet
-```
+## Environment Configuration
 
-## Running locally
+Create a `.env` file with the following variables:
 
-1) Install dependencies:
-- `npm install`
+```env
+# NEAR Configuration
+AGENT_CONTRACT_ID=      # The Shade Agent contract ID
+SPONSOR_ACCOUNT_ID=     # Account used to fund/sponsor transactions
+SPONSOR_PRIVATE_KEY=    # Private key for the sponsor account
 
-2) Copy and edit env file:
-- `cp .env.example .env`
+# GitHub & Security
+GITHUB_WEBHOOK_SECRET=  # Secret for validating GitHub webhooks
+MAINTAINER_SECRET=      # Secret used to authorize requests from the Holy Backend
 
-3) Start the agent:
-- `npm run dev`
+# AI Models
+GROQ_API_KEY=           # Optional: For high-speed reviews
+OPENAI_KEY=             # Optional: For GPT-4 based reviews
+NEAR_AI_API_KEY=        # Optional: For NEAR AI context
 
-The server listens on port **3000** by default.
-
-## Testing bounty flow in isolation
-
-```bash
-# Check bounty for a repo
-curl http://localhost:3000/api/bounty/owner/repo-name
-
-# Manually trigger a release
-curl -X POST http://localhost:3000/api/bounty/release \
-	-H "Content-Type: application/json" \
-	-d '{"repo": "owner/repo", "contributorWallet": "contributor.testnet", "prNumber": 1, "secret": "your-secret"}'
-
-# Check payout history
-curl http://localhost:3000/api/bounty/history
+# Backend Link
+BACKEND_URL=http://localhost:3001
 ```
 
-## Notes
+---
 
-- The bounty service is fully decoupled from the review logic.
-- Payout failures never block the review flow.
-- All payout attempts are logged in-memory for quick inspection.
+## Deployment & Setup
+
+### Local Development
+1. Install dependencies: `npm install`
+2. Start the development server: `npm run dev`
+3. The Agent will automatically attempt to fund itself (0.2 NEAR) and register its identity on-chain.
+
+### TEE Deployment (Phala Cloud)
+The Agent is optimized for deployment via Phala Cloud.
+1. Configure `deployment.yaml` (set `environment: TEE`).
+2. Run `docker login`.
+3. Build and push the image using the Shade CLI.
+
+---
+
+## Architecture Note
+The Shade Agent is designed to be stateless regarding user data—it fetches necessary metadata (like GitHub tokens and bounty criteria) from the Holy Backend on-demand using its secret identity. This ensures a clean separation between the "Brains" (Backend) and the "Hands" (Agent).

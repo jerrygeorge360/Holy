@@ -1,162 +1,77 @@
-# Holy Backend
+# Holy Backend: The Single Source of Truth
 
-The Holy backend is a REST API for managing GitHub repository connections, bounties, review criteria, and preferences. It serves as the single entry point for the frontend and proxies relevant calls to the Shade Agent.
+The Holy backend is the central management API for the Holy protocol. It coordinates repository connections, stores bounty data, and manages the link between GitHub users and the Shade Agent.
 
-**What the backend does:**
-- Handles GitHub OAuth + JWT auth
-- Stores users, repositories, bounties, criteria, and preferences in PostgreSQL
-- Installs GitHub webhooks on connected repositories
-- Proxies Shade Agent operations (criteria sync, bounty payout)
+## Core Responsibilities
 
-**What the Shade Agent does (separate service):**
-- Receives GitHub webhook events for pull requests (opened, synchronized, reopened, merged)
-- Evaluates pull requests against repository criteria
-- Provides advisory code review feedback using LLMs
-- Posts review comments to GitHub PRs
-- Coordinates and triggers NEAR bounty payouts when PRs are merged and criteria are met
+- **Authentication**: Handles GitHub OAuth and issues JWTs for the user dashboard.
+- **Data Persistence**: Stores users, connected repositories, bounty records, and AI criteria in PostgreSQL.
+- **Repository Integration**: Automatically installs webhooks on GitHub repos when they are connected.
+- **Agent Coordination**: Proxies request for AI criteria and provides the Shade Agent with security tokens and payout metadata.
+- **Issue Discovery**: Pulls open GitHub issues to allow maintainers to proactively assign bounties before code is even written.
 
-## Stack
+---
 
-- Node.js + Express (ESM)
-- TypeScript
-- Prisma + PostgreSQL
-- Octokit (GitHub API)
+## Technical Stack
 
-## Data model (simplified)
+- **Runtime**: Node.js + Express (ESM)
+- **Language**: TypeScript
+- **ORM**: Prisma
+- **Database**: PostgreSQL
+- **Git Integration**: Octokit
 
-- User → Repositories
-- Repository → Bounties (PR scoped)
-- Repository → Criteria
-- User → Preferences
+---
 
-## Architecture
-
-```mermaid
-flowchart TD
-    subgraph ShadeAgent[Shade Agent - separate service]
-        A[GitHub Webhook Listener]
-        B[Groq LLM Reviewer]
-        C[Post Comments to GitHub]
-        D[Release NEAR Bounty on Merge]
-    end
-
-    subgraph Backend[Backend API]
-        E[REST Endpoints]
-        F[Prisma ORM]
-        G[(PostgreSQL)]
-    end
-
-    subgraph GitHub
-        H[Pull Requests]
-    end
-
-    subgraph Users
-        I[Inspect/Export/Delete Data]
-    end
-
-    H -->|Webhook Events| A
-    A --> B
-    B --> C
-    B -->|POST /reviews| E
-    B --> D
-    E --> F
-    F --> G
-    I -->|API Calls| E
-    E -->|GET /repos/:user| H
-```
-
-The backend is the system of record. The Shade Agent is a separate service that posts review feedback and triggers payouts on merge.
-
-## Endpoints
+## Key Endpoints
 
 ### Auth
-- `GET /auth/github` — Start GitHub OAuth
-- `GET /auth/github/callback` — OAuth callback
-- `GET /auth/me` — Current user
+- **GET /auth/github**: Redirect to GitHub OAuth flow.
+- **GET /auth/me**: Retrieve current user profile and session status.
 
 ### Repositories
-- `POST /repos/connect` — Connect repo + install webhook
-- `GET /repos/me` — List connected repos
-- `PUT /repos/:owner/:repo` — Add NEAR wallet (lazy contract registration)
-- `DELETE /repos/:owner/:repo` — Disconnect repo
+- **POST /api/repos/connect**: Connect a new repository and install webhooks.
+- **GET /api/repos/me**: List all repositories managed by the authenticated user.
+- **GET /api/repos/:owner/:repo/issues**: Fetch open issues from GitHub for bounty assignment.
+- **PUT /api/repos/:owner/:repo**: Set repository metadata (like the NEAR wallet for agent registration).
 
 ### Bounties
-- `POST /bounty/attach` — Attach bounty to PR
-- `GET /bounty/:owner/:repo` — List repo bounties
-- `GET /bounty/:owner/:repo/pr/:prNumber` — Agent lookup on merge
-- `POST /bounty/:id/mark-paid` — Agent marks bounty as paid
-- `POST /bounty/release` — Manual bounty release (owner-only)
-- `GET /bounty/history` — Payout history
+- **POST /api/bounty/attach**: Assign a bounty to a specific Issue or PR (used by frontend and synced by Agent).
+- **GET /api/bounty/:owner/:repo/pr/:prNumber**: High-priority endpoint for Agent lookup during the merge flow.
+- **POST /api/bounty/:id/mark-paid**: Update bounty status to "paid" (Agent-only auth).
 
-### Criteria
-- `GET /criteria/:owner/:repo` — Get review criteria (proxied to Shade Agent)
-- `PUT /criteria/:owner/:repo` — Update review criteria (proxied to Shade Agent)
+---
 
-### Preferences
-- `POST /preferences` — Set repository preferences
-- `GET /preferences` — Get preferences by userId or repoId
-- `DELETE /preferences/:id` — Delete preferences
+## Environment Configuration
 
-## Example: Attach Bounty
+Create a `.env` file in the `backend` directory:
 
-POST `/bounty/attach`
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/holy
+SESSION_SECRET=your_session_secret
+MAINTAINER_SECRET=shared_secret_with_agent
 
-```json
-{
-  "owner": "octocat",
-  "repo": "hello-world",
-  "prNumber": 42,
-  "amount": "10.0",
-  "currency": "NEAR"
-}
-```
+# GitHub App/OAuth (Production) or Token (Development)
+GITHUB_CLIENT_ID=your_id
+GITHUB_CLIENT_SECRET=your_secret
+GITHUB_TOKEN=your_personal_token_for_dev
 
-## Example: Update Criteria
-
-PUT `/criteria/octocat/hello-world`
-
-```json
-{
-  "criteria": [
-    "Code must be well-documented",
-    "Tests must cover new features"
-  ]
-}
-```
-
-## Setup
-
-### Requirements
-- Node.js 18+
-- PostgreSQL
-
-### Environment
-Create a .env file:
-
-```
-DATABASE_URL=postgresql://user:password@localhost:5432/nyx
-GITHUB_TOKEN=your_github_token
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
 SHADE_AGENT_URL=http://localhost:3000
-MAINTAINER_SECRET=shared_secret_for_agent_calls
 PORT=3001
 ```
 
-### Install
-```
-npm install
-```
+---
 
-### Prisma
-```
-./node_modules/.bin/prisma generate
-```
+## Development Setup
 
-### Run
-```
-npm run dev
-```
+1. **Install**: `npm install`
+2. **Database**: 
+   - Ensure PostgreSQL is running.
+   - Run `npx prisma migrate dev` to setup schema.
+3. **Run**: `npm run dev`
+
+The API will be available at `http://localhost:3001`. You can view interactive documentation at `/api/docs`.
+
+---
 
 ## License
-
 MIT
