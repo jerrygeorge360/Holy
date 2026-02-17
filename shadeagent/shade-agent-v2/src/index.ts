@@ -40,8 +40,17 @@ async function start() {
       accountId: sponsorAccountId!,
       privateKey: sponsorPrivateKey!,
     },
+    numKeys: 10,
     derivationPath: "default",
   });
+  // Fund the agent account so it can exist on-chain and manage keys
+console.log("Funding agent account...");
+await agent.fund(0.2); // 0.2 NEAR
+console.log("Agent funded successfully");
+
+console.log("Registering agent...");
+await agent.register();
+console.log("Agent registered successfully");
 
   const app = express();
 

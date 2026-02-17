@@ -23,7 +23,10 @@ export async function registerRepo(
   maintainerNearId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+
     const agent = getAgent();
+    console.log("Agent account ID:", agent.accountId());
+    console.log("Is whitelisted:", await agent.isWhitelisted());
     await agent.call({
       methodName: "register_repo",
       args: {
@@ -87,7 +90,16 @@ export async function releaseBounty(
       gas: BigInt("100000000000000"),
     });
 
-    const txHash = result?.transaction?.hash || "unknown";
+    if (process.env.DEBUG === "true") {
+      console.log("Payout transaction result:", JSON.stringify(result, null, 2));
+    }
+
+    const txHash =
+      result?.transaction?.hash ||
+      result?.transaction_outcome?.id ||
+      result?.id ||
+      result?.hash ||
+      (typeof result === "string" ? result : "unknown");
 
     logPayout({
       repo: repoFullName,

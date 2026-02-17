@@ -6,9 +6,10 @@ interface PostCommentRequest {
   prNumber: number;
   review: ReviewResult;
   token: string;
+  bountyMessage?: string;
 }
 
-function formatComment(review: ReviewResult): string {
+function formatComment(review: ReviewResult, bountyMessage?: string): string {
   const status = review.approved ? "✅ Approved" : "❌ Changes requested";
   const issues = review.issues.length
     ? review.issues.map((issue) => `- ${issue}`).join("\n")
@@ -19,6 +20,7 @@ function formatComment(review: ReviewResult): string {
 
   return [
     `## Shade Agent Review`,
+    bountyMessage ? `${bountyMessage}\n` : "",
     `**Status:** ${status}`,
     `**Score:** ${review.score}/100`,
     ``,
@@ -49,7 +51,7 @@ export async function postReviewComment(
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/issues/${request.prNumber}/comments`;
-  const body = formatComment(request.review);
+  const body = formatComment(request.review, request.bountyMessage);
 
   try {
     await axios.post(

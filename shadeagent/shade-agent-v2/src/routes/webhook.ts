@@ -8,7 +8,9 @@ import { getCriteria } from "../store/criteria";
 
 const router = express.Router();
 
-const VALID_ACTIONS = new Set(["opened", "synchronize", "reopened", "closed"]);
+const VALID_ACTIONS = new Set(["opened", "synchronize", "reopened", "closed", "created"]);
+const BOUNTY_COMMAND_REGEX = /\/bounty\s+(\d+(\.\d+)?)/i;
+const ISSUE_REF_REGEX = /#(\d+)/g;
 
 function verifySignature(rawBody: Buffer, signatureHeader?: string): boolean {
   if (!signatureHeader) return false;
@@ -79,7 +81,7 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Invalid signature" });
   }
 
-  if (event !== "pull_request") {
+  if (event !== "pull_request" && event !== "issues" && event !== "issue_comment") {
     return res.status(200).json({ status: "ignored" });
   }
 
@@ -96,10 +98,12 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(200).json({ status: "ignored" });
   }
 
-  const pr = payload?.pull_request;
-  if (!pr) {
-    return res.status(400).json({ error: "Missing pull_request data" });
-  }
+  const isIssue = event === "issues" || event === "issue_comment";
+  const pr = isIssue ? (payload?.issue?.pull_request ? payload.issue : null) : payload?.pull_request;
+
+  // Quick check for issue vs PR
+  const issueNumber = payload?.issue?.number || payload?.pull_request?.number;
+  const isRealIssue = isIssue && !payload?.issue?.pull_request;
 
   const repoFullName = payload?.repository?.full_name;
   const prNumber = pr?.number;
@@ -112,14 +116,10 @@ router.post("/", async (req: Request, res: Response) => {
 
   if (
     !repoFullName ||
-    !prNumber ||
-    !prTitle ||
-    !diffUrl ||
-    !contributor ||
-    !baseBranch ||
-    !headBranch
+    !issueNumber ||
+    !contributor
   ) {
-    return res.status(400).json({ error: "Incomplete pull request data" });
+    return res.status(400).json({ error: "Incomplete webhook data" });
   }
 
   try {
@@ -131,8 +131,69 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Missing backend configuration" });
     }
 
-    // Fetch bounty and owner token from backend
+    // 🔍 Feature: Automatic Bounty Sync from GitHub Comments
+    if (event === "issue_comment" || (event === "issues" && action === "opened")) {
+      const textToScan = payload?.comment?.body || payload?.issue?.body || "";
+      const bountyMatch = textToScan.match(BOUNTY_COMMAND_REGEX);
+
+      if (bountyMatch) {
+        const amount = bountyMatch[1];
+        console.info(`[Bounty Sync] Detected bounty command: ${amount} NEAR for Issue #${issueNumber}`);
+
+        try {
+          await axios.post(
+            `${backendUrl}/api/bounty/attach`,
+            {
+              repo: repoFullName,
+              issueNumber: isRealIssue ? issueNumber : undefined,
+              prNumber: !isRealIssue ? issueNumber : undefined,
+              amount: amount
+            },
+            { headers: { "x-agent-secret": agentSecret } }
+            // Note: We'll need to allow Agent to call attach in the backend next
+          );
+          console.info(`[Bounty Sync] Successfully synced bounty to backend.`);
+        } catch (err: any) {
+          console.error(`[Bounty Sync] Failed to sync to backend:`, err.message);
+        }
+      }
+
+      // If it's just a comment/issue and not a PR review candidate, we can stop here
+      if (isRealIssue || event === "issue_comment") {
+        return res.status(200).json({ status: "processed-sync" });
+      }
+    }
+
+    // --- Original PR Flow starts here ---
+    const prTitle = pr?.title;
+    const diffUrl = pr?.diff_url;
+    if (!prTitle || !diffUrl) return res.status(200).json({ status: "ignored-non-pr" });
+
     const [owner, name] = repoFullName.split("/");
+
+    // 🔗 Feature: Auto-link PR to Issue Bounty
+    if (event === "pull_request" && action === "opened") {
+      const matches = [...prBody.matchAll(ISSUE_REF_REGEX)];
+      for (const match of matches) {
+        const refIssueNumber = match[1];
+        console.info(`[Bounty Link] PR #${issueNumber} references Issue #${refIssueNumber}. Syncing...`);
+        try {
+          await axios.post(
+            `${backendUrl}/api/bounty/attach`,
+            {
+              repo: repoFullName,
+              issueNumber: Number(refIssueNumber),
+              prNumber: Number(issueNumber)
+            },
+            { headers: { "x-agent-secret": agentSecret } }
+          );
+        } catch (err: any) {
+          console.warn(`[Bounty Link] Could not link PR to Issue #${refIssueNumber}:`, err.message);
+        }
+      }
+    }
+
+    // Fetch bounty and owner token from backend
     const bountyResponse = await axios.get(
       `${backendUrl}/api/bounty/${owner}/${name}/pr/${prNumber}`,
       { headers: { "x-agent-secret": agentSecret } },
@@ -218,11 +279,15 @@ router.post("/", async (req: Request, res: Response) => {
     });
     console.info(`[Step 4] AI Review generated. Score: ${reviewResult.score}`);
 
+    // Add bounty info to review if it exists
+    const bountyInfo = bounty?.amount ? `💰 **Bounty Alert:** ${bounty.amount} NEAR is attached to this PR and will be released upon merge!` : "";
+
     await postReviewComment({
       repoFullName,
-      prNumber,
+      prNumber: Number(issueNumber), // it's prNumber in this context
       review: reviewResult,
       token: githubToken,
+      bountyMessage: bountyInfo
     });
     console.info(`[Step 5] Successfully posted review comment to PR #${prNumber}`);
   } catch (error: any) {

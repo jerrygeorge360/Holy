@@ -109,7 +109,7 @@ router.post("/connect", async (req: Request, res: Response) => {
       body: JSON.stringify({
         name: "web",
         active: true,
-        events: ["pull_request"],
+        events: ["pull_request", "issues", "issue_comment"],
         config: {
           url: `${config.shadeAgentUrl}/api/webhook`,
           content_type: "json",
@@ -401,7 +401,8 @@ router.delete("/:owner/:repo", async (req: Request, res: Response) => {
 router.put("/:owner/:repo", async (req: Request, res: Response) => {
   const { owner, repo } = req.params;
   const fullName = `${owner}/${repo}`;
-  const { nearWallet } = req.body;
+  console.log(req.body);
+  const { nearWallet } = req.body || {};
 
   if (!req.authUserId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -475,6 +476,92 @@ router.put("/:owner/:repo", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Update repo error:", err);
     return res.status(500).json({ error: "Failed to update repository" });
+  }
+});
+
+/**
+ * @swagger
+ * /api/repos/{owner}/{repo}/issues:
+ *   get:
+ *     summary: Get all open issues for a connected repository
+ *     tags: [Repositories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of open issues
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the owner or token missing
+ *       404:
+ *         description: Repository not found
+ */
+router.get("/:owner/:repo/issues", async (req: Request, res: Response) => {
+  const { owner, repo } = req.params;
+  const fullName = `${owner}/${repo}`;
+
+  if (!req.authUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    // 1. Verify repository ownership and get user token
+    const repository = await prisma.repository.findUnique({
+      where: { fullName },
+      select: {
+        ownerId: true,
+        owner: { select: { githubToken: true } }
+      },
+    });
+
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found" });
+    }
+
+    if (repository.ownerId !== req.authUserId) {
+      return res.status(403).json({ error: "You do not own this repository" });
+    }
+
+    const token = repository.owner?.githubToken;
+    if (!token) {
+      return res.status(403).json({ error: "GitHub token missing. Please re-authenticate." });
+    }
+
+    // 2. Fetch issues from GitHub API
+    const githubResponse = await fetch(`https://api.github.com/repos/${fullName}/issues?state=open&pulls=false`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+
+    if (!githubResponse.ok) {
+      const errorData = await githubResponse.json();
+      console.error("GitHub issues fetch failed:", errorData);
+      return res.status(githubResponse.status).json({ error: "Failed to fetch issues from GitHub" });
+    }
+
+    const issues = await githubResponse.json();
+
+    // Filter out PRs if they were accidentally included (GitHub API /issues sometimes includes PRs)
+    const filteredIssues = issues.filter((issue: any) => !issue.pull_request);
+
+    return res.json(filteredIssues);
+  } catch (err) {
+    console.error("Fetch issues error:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

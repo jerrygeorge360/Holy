@@ -28,8 +28,10 @@ const router = Router();
  *                 example: octocat/hello-world
  *               issueNumber:
  *                 type: number
+ *                 example: 42
  *               prNumber:
  *                 type: number
+ *                 example: 101
  *               amount:
  *                 type: string
  *                 example: "10"
@@ -47,60 +49,73 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.post("/attach", requireAuth, async (req: Request, res: Response) => {
+router.post("/attach", async (req: Request, res: Response) => {
   const { repo, issueNumber, prNumber, amount } = req.body || {};
+  const agentSecret = req.header("x-agent-secret");
+  const isAgent = agentSecret && agentSecret === config.maintainerSecret;
 
-  if (!req.authUserId) {
-    return res.status(401).json({ error: "Unauthorized" });
+  // Use requireAuth-like logic manually if not an agent
+  if (!isAgent) {
+    // We can't easily call next() in the middle, so we'll just check req.authUserId
+    // which is set by the global middleware if we had one, but we removed it.
+    // So we apply requireAuth manually here.
+    return requireAuth(req, res, async () => {
+      await processAttach();
+    });
+  } else {
+    await processAttach();
   }
 
-  if (!repo || !amount || (!issueNumber && !prNumber)) {
-    return res.status(400).json({
-      error: "repo, amount, and either issueNumber or prNumber are required",
-    });
-  }
-
-  try {
-    const repository = await prisma.repository.findUnique({
-      where: { fullName: repo },
-      select: { id: true, ownerId: true },
-    });
-
-    if (!repository) {
-      return res.status(404).json({ error: "Repository not found" });
+  async function processAttach() {
+    if (!repo || (!amount && (!issueNumber || !prNumber)) || (!issueNumber && !prNumber)) {
+      return res.status(400).json({
+        error: "repo and either (amount + issue/PR) or (issue + PR for linking) are required",
+      });
     }
 
-    if (repository.ownerId !== req.authUserId) {
-      return res.status(403).json({ error: "You do not own this repository" });
-    }
+    try {
+      const repository = await prisma.repository.findUnique({
+        where: { fullName: repo },
+        select: { id: true, ownerId: true },
+      });
 
-    const existingBounty = await prisma.bounty.findFirst({
-      where: {
-        repoId: repository.id,
-        ...(prNumber ? { prNumber: Number(prNumber) } : {}),
-        ...(issueNumber ? { issueNumber: Number(issueNumber) } : {}),
-      },
-    });
+      if (!repository) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
 
-    const bounty = existingBounty
-      ? await prisma.bounty.update({
-        where: { id: existingBounty.id },
-        data: { amount: String(amount), status: "open" },
-      })
-      : await prisma.bounty.create({
-        data: {
+      // Only check ownership if a real user is calling, not the agent
+      if (!isAgent && repository.ownerId !== req.authUserId) {
+        return res.status(403).json({ error: "You do not own this repository" });
+      }
+
+      const existingBounty = await prisma.bounty.findFirst({
+        where: {
           repoId: repository.id,
-          issueNumber: issueNumber ? Number(issueNumber) : null,
-          prNumber: prNumber ? Number(prNumber) : null,
-          amount: String(amount),
-          status: "open",
+          ...(prNumber ? { prNumber: Number(prNumber) } : {}),
+          ...(issueNumber ? { issueNumber: Number(issueNumber) } : {}),
         },
       });
 
-    return res.status(201).json({ bounty });
-  } catch (err) {
-    console.error("Attach bounty error:", err);
-    return res.status(500).json({ error: "Failed to attach bounty" });
+      const bounty = existingBounty
+        ? await prisma.bounty.update({
+          where: { id: existingBounty.id },
+          data: { amount: String(amount), status: "open" },
+        })
+        : await prisma.bounty.create({
+          data: {
+            repoId: repository.id,
+            issueNumber: issueNumber ? Number(issueNumber) : null,
+            prNumber: prNumber ? Number(prNumber) : null,
+            amount: String(amount),
+            status: "open",
+          },
+        });
+
+      return res.status(201).json({ bounty });
+    } catch (err) {
+      console.error("Attach bounty error:", err);
+      return res.status(500).json({ error: "Failed to attach bounty" });
+    }
   }
 });
 
