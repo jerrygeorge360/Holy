@@ -14,7 +14,7 @@ services:
       BACKEND_URL: ${BACKEND_URL}
       BACKEND_CALLBACK_URL: ${BACKEND_CALLBACK_URL}
     platform: linux/amd64
-    image: jerrygeorge/holy@sha256:cddf91b538eccb1bf8129f9e19a8de871d7b037a12801403df14a07d2db8b9e6
+    image: jerrygeorge/holy@sha256:7c3be5bad0702688cf07a89c13256f90f06183592f725739933fb3dad1286b56
     container_name: shade-agent-app
     ports:
       - 3000:3000
