@@ -41,11 +41,11 @@ export default function DashboardPage() {
 
   const fetchRepos = () => {
     setLoading(true);
-    Promise.all([getMyRepos(), getBountyHistory().catch(() => ({ history: [] }))])
+    Promise.all([getMyRepos(), getBountyHistory().catch(() => ({ payouts: [] }))])
       .then(([reposData, historyData]: [EnrichedRepository[], any]) => {
         setRepos(reposData);
-        if (historyData?.history) {
-          setHistory(historyData.history.slice(0, 5)); // Just the last 5
+        if (historyData?.payouts) {
+          setHistory(historyData.payouts.slice(0, 5)); // Just the last 5
         }
         setError(null);
       })

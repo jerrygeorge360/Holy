@@ -162,9 +162,9 @@ export default function RepoDetailPage({
     const handleLoadHistory = async () => {
         try {
             const data: any = await getBountyHistory();
-            if (data && data.history) {
+            if (data && data.payouts) {
                 // Filter history for this repo only if backend returns global
-                const filtered = data.history.filter((h: any) => h.repo === fullName);
+                const filtered = data.payouts.filter((h: any) => h.repo === fullName);
                 setHistory(filtered);
             }
         } catch (err) {

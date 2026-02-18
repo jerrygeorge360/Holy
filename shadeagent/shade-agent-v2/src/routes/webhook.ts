@@ -227,22 +227,67 @@ router.post("/", async (req: Request, res: Response) => {
     console.info(`[Step 3] Diff retrieved (${diff.length} chars).`);
 
     if (action === "closed" && pr?.merged) {
-      if (!bounty?.amount) {
-        return res.status(200).json({ status: "no-bounty-for-merge" });
+      let payoutBounty = bounty;
+      // If no bounty, create one with default amount 0.1 NEAR
+      if (!payoutBounty) {
+        const createResp = await axios.post(
+          `${backendUrl}/api/bounty/attach`,
+          {
+            repo: repoFullName,
+            prNumber,
+            amount: "0.1",
+          },
+          { headers: { "x-agent-secret": agentSecret } }
+        );
+        payoutBounty = createResp.data.bounty;
       }
 
-      const contributorWallet =
-        process.env.TEST_CONTRIBUTOR_WALLET || contributor;
 
-      const payoutResult = await releaseBounty({
-        repoFullName,
-        contributorWallet,
-        prNumber,
-        amount: String(bounty.amount),
-      });
+      // Extract /link-wallet <wallet> from PR body or comments
+      let contributorWallet = process.env.TEST_CONTRIBUTOR_WALLET;
+      if (!contributorWallet) {
+        const linkWalletRegex = /\/link-wallet\s+([a-zA-Z0-9_.-]+\.testnet)/i;
+        let match = prBody.match(linkWalletRegex);
+        if (!match && payload?.comment?.body) {
+          match = payload.comment.body.match(linkWalletRegex);
+        }
+        if (match) {
+          contributorWallet = match[1];
+        }
+      }
+
+      // If no wallet found, do not attempt payout
+      if (!contributorWallet) {
+        console.warn("No /link-wallet found in PR body or comments. Skipping payout.");
+        return res.status(200).json({ status: "skipped-no-wallet" });
+      }
+
+      // Retry logic for payout (up to 3 times)
+      let payoutResult: { success?: boolean; txHash?: string; error?: string } | undefined = undefined;
+      let attempts = 0;
+      while (attempts < 3) {
+        try {
+          payoutResult = await releaseBounty({
+            repoFullName,
+            contributorWallet,
+            prNumber,
+            amount: String(payoutBounty.amount),
+          });
+          if (payoutResult?.success) break;
+        } catch (err: any) {
+          console.warn(`Payout attempt ${attempts + 1} failed:`, err.message || err);
+        }
+        attempts++;
+        if (!payoutResult?.success) await new Promise(r => setTimeout(r, 1000 * attempts));
+      }
+
+      // If payoutResult is still undefined after retries, mark it as a failed result
+      if (!payoutResult) {
+        payoutResult = { success: false, error: "Payout failed after retries" };
+      }
 
       const message = payoutResult.success
-        ? `✅ Bounty released: ${bounty.amount} NEAR\nTx: ${payoutResult.txHash || ""}`
+        ? `✅ Bounty released: ${payoutBounty.amount} NEAR\nTx: ${payoutResult.txHash || ""}`
         : `❌ Bounty release failed: ${payoutResult.error || "Unknown error"}`;
 
       await postPayoutComment({
@@ -252,9 +297,9 @@ router.post("/", async (req: Request, res: Response) => {
         token: githubToken,
       });
 
-      if (payoutResult.success && bounty?.id) {
+      if (payoutResult.success && payoutBounty?.id) {
         await axios.post(
-          `${backendUrl}/api/bounty/${bounty.id}/mark-paid`,
+          `${backendUrl}/api/bounty/${payoutBounty.id}/mark-paid`,
           {},
           { headers: { "x-agent-secret": agentSecret } },
         );
