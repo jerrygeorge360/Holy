@@ -757,6 +757,13 @@ export default function RepoDetailPage({
             {/* Settings Tab */}
             {activeTab === "settings" && (
                 <div className="space-y-4">
+                    {/* Default Bounty Note */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 md:p-6">
+                        <h3 className="font-semibold text-blue-900 text-sm mb-1">Default Bounty</h3>
+                        <p className="text-xs text-blue-700 mb-3">
+                            The default bounty for this repo is <span className="font-bold">0.1 NEAR</span>.
+                        </p>
+                    </div>
                     {/* NEAR Wallet Section */}
                     <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6">
                         <h3 className="font-semibold text-black text-sm mb-1">NEAR Wallet</h3>
