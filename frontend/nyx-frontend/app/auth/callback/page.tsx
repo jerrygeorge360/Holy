@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { Suspense } from "react";
@@ -11,15 +11,20 @@ function CallbackHandler() {
     const { login } = useAuth();
     const [status, setStatus] = useState("Signing you in...");
 
+    const called = useRef(false);
+
     useEffect(() => {
+        if (called.current) return;
         const token = searchParams.get("token");
         if (token) {
+            called.current = true;
             login(token);
             setStatus("Success! Redirecting...");
-            setTimeout(() => router.push("/dashboard"), 1000);
+            router.push("/dashboard");
         } else {
+            called.current = true;
             setStatus("No token received.");
-            setTimeout(() => router.push("/"), 2000);
+            router.push("/");
         }
     }, [searchParams, login, router]);
 

@@ -100,6 +100,10 @@ export interface Bounty {
     status: string | null;
     createdAt: string;
     updatedAt: string;
+    repository?: {
+        fullName: string;
+        url: string;
+    };
 }
 
 /** GitHub issue as proxied by GET /api/repos/:owner/:repo/issues */
@@ -256,6 +260,11 @@ export async function releaseBounty(data: {
 /** GET /api/bounty/history — payout history from Shade Agent */
 export async function getBountyHistory(): Promise<Record<string, unknown>> {
     return apiFetch<Record<string, unknown>>("/api/bounty/history");
+}
+
+/** GET /api/bounty/explore — list all open bounties (Public) */
+export async function getExploreBounties(): Promise<{ bounties: Bounty[] }> {
+    return apiFetch<{ bounties: Bounty[] }>("/api/bounty/explore");
 }
 
 /* ------------------------------------------------------------------ */

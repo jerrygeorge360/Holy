@@ -223,6 +223,40 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
 
 /**
  * @swagger
+ * /api/bounty/explore:
+ *   get:
+ *     summary: List all open bounties across all repositories (Public)
+ *     tags: [Bounties]
+ *     responses:
+ *       200:
+ *         description: List of open bounties with repo details
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/explore", async (_req: Request, res: Response) => {
+  try {
+    const bounties = await prisma.bounty.findMany({
+      where: { status: "open" },
+      include: {
+        repository: {
+          select: {
+            fullName: true,
+            url: true,
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({ bounties });
+  } catch (err) {
+    console.error("Explore bounties error:", err);
+    return res.status(500).json({ error: "Failed to explore bounties" });
+  }
+});
+
+/**
+ * @swagger
  * /api/bounty/{owner}/{repo}:
  *   get:
  *     summary: List all bounties for a repository

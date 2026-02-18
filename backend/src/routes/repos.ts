@@ -245,7 +245,8 @@ router.get("/me", async (req: Request, res: Response) => {
           }
 
           const bountyData = await bountyResponse.json();
-          return { ...repo, bountyBalance: bountyData.balance };
+          // Shade Agent returns { amount: "..." }, but frontend expects bountyBalance
+          return { ...repo, bountyBalance: bountyData.amount };
         } catch (err) {
           console.error("Shade Agent bounty error:", err);
           throw err;
@@ -600,7 +601,8 @@ router.get("/:owner/:repo/bounty", async (req: Request, res: Response) => {
     }
 
     const bountyData = await bountyResponse.json();
-    return res.json(bountyData);
+    // Frontend expects "balance" but agent returns "amount"
+    return res.json({ ...bountyData, balance: bountyData.amount });
   } catch (err) {
     console.error("Bounty fetch error:", err);
     return res.status(503).json({ error: "Agent service unavailable" });
@@ -620,7 +622,8 @@ router.get("/:owner/:repo/balance", async (req: Request, res: Response) => {
     }
 
     const bountyData = await bountyResponse.json();
-    return res.json(bountyData);
+    // Frontend expects "balance" but agent returns "amount"
+    return res.json({ ...bountyData, balance: bountyData.amount });
   } catch (err) {
     console.error("Bounty fetch error:", err);
     return res.status(503).json({ error: "Agent service unavailable" });

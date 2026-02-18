@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { getMe, type User } from "./api";
 
 interface AuthState {
@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchUser = async () => {
+    const fetchUser = useCallback(async () => {
         try {
             const u = await getMe();
             setUser(u);
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setToken(null);
             setUser(null);
         }
-    };
+    }, []);
 
     /* On mount, check localStorage for an existing token */
     useEffect(() => {
@@ -46,23 +46,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setToken(stored);
         fetchUser().finally(() => setIsLoading(false));
-    }, []);
+    }, [fetchUser]);
 
-    const login = (newToken: string) => {
+    const login = useCallback((newToken: string) => {
         localStorage.setItem("holy_token", newToken);
         setToken(newToken);
         fetchUser();
-    };
+    }, [fetchUser]);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         localStorage.removeItem("holy_token");
         setToken(null);
         setUser(null);
-    };
+    }, []);
 
-    const refreshUser = async () => {
+    const refreshUser = useCallback(async () => {
         await fetchUser();
-    };
+    }, [fetchUser]);
 
     return (
         <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser }}>
