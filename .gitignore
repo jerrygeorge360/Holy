@@ -97,3 +97,10 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+### Root
+node_modules/
+dist/
+build/
+.cache/
+.turbo/

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
     ArrowLeft,
@@ -15,6 +15,14 @@ import {
     CircleDot,
     Coins,
     Save,
+    Zap,
+    Shield,
+    AlertCircle,
+    GitBranch,
+    CheckCircle,
+    AlertTriangle,
+    ShieldAlert,
+    Cpu,
 } from "lucide-react";
 import Button from "@/shared/Button";
 import {
@@ -25,6 +33,8 @@ import {
     getFundingInstructions,
     updateRepo,
     deleteRepo,
+    releaseBounty,
+    getBountyHistory,
     ApiError,
     type GitHubIssue,
     type Bounty,
@@ -47,17 +57,33 @@ export default function RepoDetailPage({
     const [issues, setIssues] = useState<GitHubIssue[]>([]);
     const [bounties, setBounties] = useState<Bounty[]>([]);
     const [fundingInfo, setFundingInfo] = useState<FundingInstructions | null>(null);
+    const [history, setHistory] = useState<any[]>([]);
 
     // UI states
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"issues" | "bounties" | "funding" | "settings">("issues");
+    const [mounted, setMounted] = useState(false);
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get("tab") as any;
+    const [activeTab, setActiveTab] = useState<"issues" | "bounties" | "funding" | "history" | "settings">(
+        initialTab && ["issues", "bounties", "funding", "history", "settings"].includes(initialTab)
+            ? initialTab
+            : "issues"
+    );
 
     // Attach bounty form
-    const [attachIssue, setAttachIssue] = useState("");
+    const [attachType, setAttachType] = useState<"issue" | "pr">("issue");
+    const [attachNumber, setAttachNumber] = useState("");
     const [attachAmount, setAttachAmount] = useState("");
     const [attaching, setAttaching] = useState(false);
     const [attachSuccess, setAttachSuccess] = useState<string | null>(null);
+
+    // Manual release form (in Bounties tab)
+    const [releaseWallet, setReleaseWallet] = useState("");
+    const [releasePR, setReleasePR] = useState("");
+    const [releaseAmount, setReleaseAmount] = useState("");
+    const [releasing, setReleasing] = useState(false);
+    const [releaseSuccess, setReleaseSuccess] = useState<string | null>(null);
 
     // Wallet
     const [walletInput, setWalletInput] = useState("");
@@ -78,6 +104,7 @@ export default function RepoDetailPage({
 
     // Load data
     useEffect(() => {
+        setMounted(true);
         async function load() {
             setLoading(true);
             try {
@@ -90,6 +117,7 @@ export default function RepoDetailPage({
                 if (bal.status === "fulfilled") setBountyData(bal.value);
                 if (iss.status === "fulfilled") setIssues(iss.value);
                 if (bty.status === "fulfilled") setBounties(bty.value.bounties);
+                if (activeTab === "funding") handleLoadFunding();
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to load data");
             } finally {
@@ -101,18 +129,19 @@ export default function RepoDetailPage({
 
     // Handlers
     const handleAttachBounty = async () => {
-        if (!attachIssue || !attachAmount) return;
+        if (!attachNumber || !attachAmount) return;
         setAttaching(true);
+        setAttachType(attachType);
         setAttachSuccess(null);
         try {
             const result = await attachBounty({
                 repo: fullName,
-                issueNumber: Number(attachIssue),
+                ...(attachType === "issue" ? { issueNumber: Number(attachNumber) } : { prNumber: Number(attachNumber) }),
                 amount: attachAmount,
             });
             setBounties((prev) => [result.bounty, ...prev]);
-            setAttachSuccess(`Bounty of ${attachAmount} NEAR attached to issue #${attachIssue}`);
-            setAttachIssue("");
+            setAttachSuccess(`Bounty of ${attachAmount} NEAR attached to ${attachType} #${attachNumber}`);
+            setAttachNumber("");
             setAttachAmount("");
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to attach bounty");
@@ -127,6 +156,45 @@ export default function RepoDetailPage({
             setFundingInfo(info);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load funding info");
+        }
+    };
+
+    const handleLoadHistory = async () => {
+        try {
+            const data: any = await getBountyHistory();
+            if (data && data.payouts) {
+                // Filter history for this repo only if backend returns global
+                const filtered = data.payouts.filter((h: any) => h.repo === fullName);
+                setHistory(filtered);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load history");
+        }
+    };
+
+    const handleReleaseBounty = async () => {
+        if (!releaseWallet || !releasePR) return;
+        setReleasing(true);
+        setReleaseSuccess(null);
+        try {
+            await releaseBounty({
+                repo: fullName,
+                contributorWallet: releaseWallet,
+                prNumber: Number(releasePR),
+                amount: releaseAmount || undefined
+            });
+            setReleaseSuccess(`Bounty release triggered for PR #${releasePR}`);
+            setReleaseWallet("");
+            setReleasePR("");
+            setReleaseAmount("");
+            // Refresh data
+            const bal = await getRepoBountyBalance(owner, repo);
+            setBountyData(bal);
+            handleLoadHistory();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to release bounty");
+        } finally {
+            setReleasing(false);
         }
     };
 
@@ -203,15 +271,52 @@ export default function RepoDetailPage({
                             )}
                         </div>
                     </div>
-                    <a
-                        href={`https://github.com/${fullName}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-                    >
-                        <ExternalLink className="w-4 h-4" />
-                        GitHub
-                    </a>
+                    <div className="flex items-center gap-3">
+                        <Button
+                            onClick={() => {
+                                setActiveTab("funding");
+                                if (!fundingInfo) handleLoadFunding();
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white gap-2 px-4 py-2 text-xs rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5"
+                        >
+                            <Coins className="w-3.5 h-3.5" />
+                            Fund Repo
+                        </Button>
+                        <a
+                            href={`https://github.com/${fullName}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                            <ExternalLink className="w-4 h-4" />
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {/* Health Snapshot */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                <div className={`p-3 rounded-xl border flex items-center justify-between ${!currentWallet ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                    <div className="flex items-center gap-2">
+                        {!currentWallet ? <ShieldAlert className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                        <span className="text-[11px] font-bold uppercase tracking-wider">Wallet</span>
+                    </div>
+                    <span className="text-[10px] font-medium">{currentWallet ? 'Linked' : 'Missing'}</span>
+                </div>
+                <div className={`p-3 rounded-xl border flex items-center justify-between ${(Number(bountyData?.balance) || 0) === 0 ? 'bg-orange-50 border-orange-100 text-orange-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                    <div className="flex items-center gap-2">
+                        {(Number(bountyData?.balance) || 0) === 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                        <span className="text-[11px] font-bold uppercase tracking-wider">Funds</span>
+                    </div>
+                    <span className="text-[10px] font-medium">{Number(bountyData?.balance) || 0} NEAR</span>
+                </div>
+                <div className={`p-3 rounded-xl border flex items-center justify-between ${(!currentRepo?.preferences || currentRepo.preferences.length === 0) ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                    <div className="flex items-center gap-2">
+                        {(!currentRepo?.preferences || currentRepo.preferences.length === 0) ? <Cpu className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                        <span className="text-[11px] font-bold uppercase tracking-wider">AI Criteria</span>
+                    </div>
+                    <span className="text-[10px] font-medium">{(!currentRepo?.preferences || currentRepo.preferences.length === 0) ? 'Generic' : 'Custom'}</span>
                 </div>
             </div>
 
@@ -227,21 +332,23 @@ export default function RepoDetailPage({
             {/* Tabs */}
             <div className="border-b border-slate-200 mb-6 overflow-x-auto">
                 <div className="flex gap-4 md:gap-6 min-w-max">
-                    {(["issues", "bounties", "funding", "settings"] as const).map((tab) => (
+                    {(["issues", "bounties", "funding", "history", "settings"] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {
                                 setActiveTab(tab);
                                 if (tab === "funding" && !fundingInfo) handleLoadFunding();
+                                if (tab === "history") handleLoadHistory();
                             }}
                             className={`pb-3 px-1 border-b-2 transition-colors capitalize text-sm whitespace-nowrap cursor-pointer ${activeTab === tab
-                                    ? "border-blue-600 text-blue-600 font-medium"
-                                    : "border-transparent text-slate-600 hover:text-slate-900"
+                                ? "border-blue-600 text-blue-600 font-medium"
+                                : "border-transparent text-slate-600 hover:text-slate-900"
                                 }`}
                         >
                             {tab === "issues" ? `Issues (${issues.length})` :
                                 tab === "bounties" ? `Bounties (${bounties.length})` :
-                                    tab}
+                                    tab === "history" ? `History (${history.length})` :
+                                        tab}
                         </button>
                     ))}
                 </div>
@@ -295,42 +402,71 @@ export default function RepoDetailPage({
             {activeTab === "bounties" && (
                 <div className="space-y-4">
                     {/* Attach Bounty Form */}
-                    <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6">
-                        <h3 className="font-semibold text-black text-sm mb-3">Attach Bounty to Issue</h3>
-                        <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-black text-sm">Create Bounty</h3>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button
+                                    onClick={() => setAttachType("issue")}
+                                    className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${attachType === "issue" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"}`}
+                                >
+                                    ISSUE
+                                </button>
+                                <button
+                                    onClick={() => setAttachType("pr")}
+                                    className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${attachType === "pr" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"}`}
+                                >
+                                    PR
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-4">
                             <div className="flex-1">
-                                <label className="block text-xs text-slate-600 mb-1">Issue Number</label>
-                                <input
-                                    type="number"
-                                    placeholder="42"
-                                    value={attachIssue}
-                                    onChange={(e) => setAttachIssue(e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm text-black bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <label className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                                    {attachType === "issue" ? "Issue Number" : "PR Number"}
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">#</span>
+                                    <input
+                                        type="number"
+                                        placeholder="42"
+                                        value={attachNumber}
+                                        onChange={(e) => setAttachNumber(e.target.value)}
+                                        className="w-full pl-7 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-xs text-slate-600 mb-1">Amount (NEAR)</label>
-                                <input
-                                    type="text"
-                                    placeholder="10"
-                                    value={attachAmount}
-                                    onChange={(e) => setAttachAmount(e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm text-black bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <label className="block text-[11px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                                    Amount (NEAR)
+                                </label>
+                                <div className="relative">
+                                    <Coins className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="10"
+                                        value={attachAmount}
+                                        onChange={(e) => setAttachAmount(e.target.value)}
+                                        className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-black bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
                             </div>
                             <div className="flex items-end">
                                 <Button
                                     onClick={handleAttachBounty}
-                                    disabled={!attachIssue || !attachAmount || attaching}
-                                    className="gap-1 text-xs text-white bg-black rounded-lg px-4 py-2 disabled:opacity-50"
+                                    disabled={!attachNumber || !attachAmount || attaching}
+                                    className="w-full sm:w-auto h-[42px] gap-2 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-xl px-6 transition-all shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50"
                                 >
-                                    {attaching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />}
-                                    Attach
+                                    {attaching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Set Bounty
                                 </Button>
                             </div>
                         </div>
                         {attachSuccess && (
-                            <p className="text-xs text-green-700 mt-2">{attachSuccess}</p>
+                            <div className="mt-4 p-3 bg-green-50 border border-green-100 rounded-xl flex items-center gap-2">
+                                <Check className="w-4 h-4 text-green-600" />
+                                <p className="text-xs text-green-700 font-medium">{attachSuccess}</p>
+                            </div>
                         )}
                     </div>
 
@@ -341,59 +477,235 @@ export default function RepoDetailPage({
                             <p className="text-sm">No bounties yet</p>
                         </div>
                     ) : (
-                        bounties.map((bounty) => (
-                            <div
-                                key={bounty.id}
-                                className="p-4 bg-white border border-slate-200 rounded-lg"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            {bounty.issueNumber && (
-                                                <span className="text-sm font-medium text-black">
-                                                    Issue #{bounty.issueNumber}
-                                                </span>
-                                            )}
-                                            {bounty.prNumber && (
-                                                <span className="text-sm font-medium text-black">
-                                                    PR #{bounty.prNumber}
-                                                </span>
-                                            )}
-                                            <span
-                                                className={`text-xs px-2 py-0.5 rounded-full ${bounty.status === "paid"
+                        <div className="space-y-3">
+                            {bounties.map((bounty) => (
+                                <div
+                                    key={bounty.id}
+                                    className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {bounty.issueNumber && (
+                                                    <span className="text-sm font-medium text-black">
+                                                        Issue #{bounty.issueNumber}
+                                                    </span>
+                                                )}
+                                                {bounty.prNumber && (
+                                                    <span className="text-sm font-medium text-black">
+                                                        PR #{bounty.prNumber}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${bounty.status === "paid"
                                                         ? "bg-green-100 text-green-800"
                                                         : "bg-blue-100 text-blue-800"
-                                                    }`}
-                                            >
-                                                {bounty.status || "open"}
+                                                        }`}
+                                                >
+                                                    {bounty.status || "open"}
+                                                </span>
+                                                {Number(bounty.amount) >= 20 && (
+                                                    <span className="bg-orange-100 text-orange-800 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                        <Zap className="w-2.5 h-2.5 fill-orange-500 text-orange-500" />
+                                                        High Stake
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] text-slate-400 mt-1">
+                                                Created {mounted ? new Date(bounty.createdAt).toLocaleDateString() : ""}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-lg font-bold text-green-700">
+                                                {bounty.amount} NEAR
                                             </span>
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            {new Date(bounty.createdAt).toLocaleDateString()}
-                                        </p>
                                     </div>
-                                    <span className="text-lg font-bold text-green-700">
-                                        {bounty.amount} NEAR
-                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Manual Release Form */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 md:p-6 text-white mt-8">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                <Coins className="w-4 h-4 text-blue-400" />
+                            </div>
+                            <h3 className="font-semibold text-sm">Manual Bounty Release</h3>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-6">
+                            Manually payout a contributor for a specific pull request. This uses the Shade Agent to verify and release funds.
+                        </p>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Contributor Wallet</label>
+                                    <input
+                                        type="text"
+                                        placeholder="contributor.near"
+                                        value={releaseWallet}
+                                        onChange={(e) => setReleaseWallet(e.target.value)}
+                                        className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">PR Number</label>
+                                        <input
+                                            type="number"
+                                            placeholder="123"
+                                            value={releasePR}
+                                            onChange={(e) => setReleasePR(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Amount (Optional)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="5"
+                                            value={releaseAmount}
+                                            onChange={(e) => setReleaseAmount(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        />
+                                    </div>
                                 </div>
                             </div>
-                        ))
+                            <Button
+                                onClick={handleReleaseBounty}
+                                disabled={!releaseWallet || !releasePR || releasing}
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-2 py-3 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {releasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                                Trigger Manual Release
+                            </Button>
+                        </div>
+                        {releaseSuccess && (
+                            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <p className="text-xs text-green-400 font-medium">{releaseSuccess}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* History Tab */}
+            {activeTab === "history" && (
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200">
+                        <h3 className="font-semibold text-black text-sm">Payout History</h3>
+                    </div>
+                    {history.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500">
+                            <Terminal className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+                            <p className="text-sm font-medium">No payout history found</p>
+                            <p className="text-xs text-slate-400">Successfully processed payouts will appear here.</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-100">
+                            {history.map((item, idx) => (
+                                <div key={idx} className="p-4 hover:bg-slate-50 transition-colors">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-sm font-bold text-black">PR #{item.prNumber}</span>
+                                                <Check className="w-3.5 h-3.5 text-green-600" />
+                                            </div>
+                                            <div className="flex flex-col gap-0.5">
+                                                <p className="text-xs text-slate-600 truncate">
+                                                    Sent to <span className="font-medium text-slate-900">{item.contributor}</span>
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                                    {mounted ? new Date(item.timestamp).toLocaleString() : ""}
+                                                    <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                                                    via Smart Contract
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-sm font-extrabold text-green-700">+{item.amount} NEAR</div>
+                                            {item.txHash ? (
+                                                <a
+                                                    href={`https://explorer.testnet.near.org/transactions/${item.txHash}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] text-blue-500 hover:underline flex items-center gap-0.5 justify-end mt-1"
+                                                >
+                                                    View TX <ExternalLink className="w-2.5 h-2.5" />
+                                                </a>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-300 mt-1 block">Internal Ledger</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             )}
 
             {/* Funding Tab */}
             {activeTab === "funding" && (
-                <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6">
-                    <h3 className="font-semibold text-black text-sm mb-3">Fund Bounty Pool</h3>
+                <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6 shadow-sm">
+                    {/* Visual How-to Guide */}
+                    <div className="mb-8 border-b border-slate-100 pb-8">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">How to fund your repo</h4>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative">
+                            {/* Connector line (hidden on mobile) */}
+                            <div className="hidden md:block absolute top-4 left-[10%] right-[10%] h-0.5 border-t-2 border-dashed border-slate-200 -z-0"></div>
+
+                            {[
+                                { step: 1, title: "Register", desc: "Connect repo & link your NEAR wallet in Settings.", icon: GitBranch },
+                                { step: 2, title: "Deposit", desc: "Run the CLI command below to send NEAR to the contract.", icon: Coins },
+                                { step: 3, title: "Bounty", desc: "Assign NEAR values to specific Issues or PRs.", icon: Zap },
+                            ].map((s, idx) => (
+                                <div key={idx} className="flex flex-row md:flex-col items-center gap-4 md:text-center relative z-10 bg-white md:px-4">
+                                    <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-lg shadow-blue-500/30">
+                                        {s.step}
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-black text-sm">{s.title}</div>
+                                        <div className="text-[10px] text-slate-500 max-w-[140px] leading-relaxed">{s.desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                            <Zap className="w-5 h-5 text-blue-600 mb-2" />
+                            <h4 className="text-xs font-bold text-black mb-1">Instant Payouts</h4>
+                            <p className="text-[10px] text-slate-500">Merged PRs trigger immediate token transfers to contributors.</p>
+                        </div>
+                        <div className="p-4 bg-green-50 border border-green-100 rounded-xl">
+                            <Shield className="w-5 h-5 text-green-600 mb-2" />
+                            <h4 className="text-xs font-bold text-black mb-1">Secure Escrow</h4>
+                            <p className="text-[10px] text-slate-500">Funds are held in a decentralized smart contract for transparency.</p>
+                        </div>
+                        <div className="p-4 bg-purple-50 border border-purple-100 rounded-xl">
+                            <ArrowLeft className="w-5 h-5 text-purple-600 mb-2 rotate-180" />
+                            <h4 className="text-xs font-bold text-black mb-1">Boost Velocity</h4>
+                            <p className="text-[10px] text-slate-500">Bounties attract high-quality developers to solve your issues faster.</p>
+                        </div>
+                    </div>
+
                     {!fundingInfo ? (
                         <div className="text-center py-6">
                             <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
                             <p className="text-sm text-slate-500">Loading funding instructions...</p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <p className="text-sm text-slate-600">{fundingInfo.message}</p>
+                        <div className="space-y-6">
+                            <div className="flex items-start gap-3 p-4 bg-orange-50 border border-orange-100 rounded-lg">
+                                <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                                <div>
+                                    <h4 className="text-xs font-bold text-orange-900">Funding Instructions</h4>
+                                    <p className="text-[11px] text-orange-800 mt-1">{fundingInfo.message}</p>
+                                </div>
+                            </div>
 
                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                                 <h4 className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
@@ -445,6 +757,13 @@ export default function RepoDetailPage({
             {/* Settings Tab */}
             {activeTab === "settings" && (
                 <div className="space-y-4">
+                    {/* Default Bounty Note */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 md:p-6">
+                        <h3 className="font-semibold text-blue-900 text-sm mb-1">Default Bounty</h3>
+                        <p className="text-xs text-blue-700 mb-3">
+                            The default bounty for this repo is <span className="font-bold">0.1 NEAR</span>.
+                        </p>
+                    </div>
                     {/* NEAR Wallet Section */}
                     <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-6">
                         <h3 className="font-semibold text-black text-sm mb-1">NEAR Wallet</h3>

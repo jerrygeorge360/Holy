@@ -1,7 +1,7 @@
 'use client';
 
 import Button from '@/shared/Button';
-import { Code2, LayoutDashboard, Settings, Plus, Menu, X, LogOut } from 'lucide-react';
+import { Code2, LayoutDashboard, Settings, Plus, Menu, X, LogOut, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -40,10 +40,16 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Code2 className="w-8 h-8 text-blue-600" />
-            <span className="font-semibold text-black text-xl">Holy</span>
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2">
+              <Code2 className="w-8 h-8 text-blue-600" />
+              <span className="font-semibold text-black text-xl">Holy</span>
+            </Link>
+            <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-100 rounded-full">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-green-700 uppercase tracking-tight">Agent Active</span>
+            </div>
+          </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
@@ -54,6 +60,14 @@ export default function DashboardLayout({
             >
               <LayoutDashboard className="w-4 h-4" />
               Dashboard
+            </Link>
+            <Link
+              href="/explore"
+              className={`flex items-center gap-2 text-sm transition-colors ${isActive('/explore') ? 'text-blue-600' : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <Trophy className="w-4 h-4" />
+              Explore
             </Link>
             <Link
               href="/settings"
@@ -106,6 +120,15 @@ export default function DashboardLayout({
               >
                 <LayoutDashboard className="w-4 h-4" />
                 Dashboard
+              </Link>
+              <Link
+                href="/explore"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2 p-3 rounded-lg transition-colors ${isActive('/explore') ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+              >
+                <Trophy className="w-4 h-4" />
+                Explore
               </Link>
               <Link
                 href="/settings"

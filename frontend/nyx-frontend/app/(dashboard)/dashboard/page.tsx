@@ -8,12 +8,21 @@ import {
   Loader2,
   Trash2,
   ExternalLink,
+  Coins,
+  Terminal,
+  AlertTriangle,
+  ShieldAlert,
+  CheckCircle,
+  Cpu,
+  Copy,
+  Check,
 } from "lucide-react";
 import Button from "@/shared/Button";
 import Link from "next/link";
 import {
   getMyRepos,
   deleteRepo,
+  getBountyHistory,
   type EnrichedRepository,
   ApiError,
 } from "@/lib/api";
@@ -22,15 +31,22 @@ import { useAuth } from "@/lib/AuthContext";
 export default function DashboardPage() {
   const { refreshUser } = useAuth();
   const [repos, setRepos] = useState<EnrichedRepository[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [showBulkFund, setShowBulkFund] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetchRepos = () => {
     setLoading(true);
-    getMyRepos()
-      .then((data) => {
-        setRepos(data);
+    Promise.all([getMyRepos(), getBountyHistory().catch(() => ({ payouts: [] }))])
+      .then(([reposData, historyData]: [EnrichedRepository[], any]) => {
+        setRepos(reposData);
+        if (historyData?.payouts) {
+          setHistory(historyData.payouts.slice(0, 5)); // Just the last 5
+        }
         setError(null);
       })
       .catch((err) => setError(err.message))
@@ -38,6 +54,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     fetchRepos();
   }, []);
 
@@ -145,13 +162,66 @@ export default function DashboardPage() {
                 Connect Repo
               </Button>
             </Link>
+            <Button
+              onClick={() => setShowBulkFund(!showBulkFund)}
+              className="text-xs md:text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-2"
+            >
+              Bulk Fund CLI
+            </Button>
           </div>
         </div>
       </div>
 
+      {/* Bulk Fund Assistant */}
+      {showBulkFund && (
+        <div className="mb-8 mx-2 md:mx-6 p-4 bg-slate-900 rounded-2xl border border-slate-800 text-white animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <Terminal className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold">Bulk Funding Assistant</h3>
+                <p className="text-[10px] text-slate-400">Fund all low-balance repositories in one go</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const cmd = repos
+                  .filter(r => (Number(r.bountyBalance) || 0) < 5)
+                  .map(r => `near call holy_contract.testnet fund_bounty '{"repo_id": "${r.fullName}"}' --accountId ${r.nearWallet || 'YOUR_ACCOUNT'} --deposit 10`)
+                  .join(' && \\\n');
+                navigator.clipboard.writeText(cmd);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors"
+            >
+              {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied!' : 'Copy Shell Script'}
+            </button>
+          </div>
+          <div className="bg-black/50 rounded-xl p-4 font-mono text-[11px] text-blue-300 overflow-x-auto max-h-[150px]">
+            {repos.filter(r => (Number(r.bountyBalance) || 0) < 5).length > 0 ? (
+              <pre>
+                {repos
+                  .filter(r => (Number(r.bountyBalance) || 0) < 5)
+                  .map(r => `near call holy_contract.testnet fund_bounty '{"repo_id": "${r.fullName}"}' --accountId ${r.nearWallet || 'YOUR_ACCOUNT'} --deposit 10`)
+                  .join(' && \\\n')}
+              </pre>
+            ) : (
+              <p className="text-slate-500 italic">All repositories have healthy balances (≥ 5 NEAR).</p>
+            )}
+          </div>
+          <p className="mt-3 text-[10px] text-slate-500">
+            Tip: This command deposits 10 NEAR into each repository marked as "Needs Funding".
+          </p>
+        </div>
+      )}
+
       {/* Connected Repositories */}
-      <div className="mx-2 md:mx-6">
-        <div className="border border-gray-400 rounded-2xl md:rounded-3xl px-4 md:px-6 py-4 md:py-6 bg-white">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mx-2 md:mx-6">
+        <div className="lg:col-span-2 border border-gray-400 rounded-2xl md:rounded-3xl px-4 md:px-6 py-4 md:py-6 bg-white">
           <div className="mb-3 md:mb-4">
             <h3 className="text-black text-sm md:text-[16px] font-bold">
               Connected Repositories
@@ -203,17 +273,47 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-slate-600">
-                          {repo.nearWallet && (
-                            <span className="truncate max-w-[160px]">{repo.nearWallet}</span>
-                          )}
-                          {balance > 0 && (
-                            <span className="text-green-700 font-medium">
+                          {balance > 0 ? (
+                            <span className="text-green-700 font-medium shrink-0">
                               {balance} NEAR
                             </span>
+                          ) : (
+                            <span className="text-orange-600 font-medium flex items-center gap-1 shrink-0">
+                              <AlertTriangle className="w-3 h-3" />
+                              0 NEAR
+                            </span>
                           )}
+
+                          {/* Health Indicator */}
+                          <div className="flex items-center gap-1.5 ml-auto md:ml-0">
+                            {!repo.nearWallet ? (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">
+                                <ShieldAlert className="w-3 h-3" /> ACCT
+                              </div>
+                            ) : balance === 0 ? (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100">
+                                <Coins className="w-3 h-3" /> FUND
+                              </div>
+                            ) : (!repo.preferences || repo.preferences.length === 0) ? (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                                <Cpu className="w-3 h-3" /> AI
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md border border-green-100">
+                                <CheckCircle className="w-3 h-3" /> OK
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </Link>
                       <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <Link
+                          href={`/repo/${owner}/${name}?tab=funding`}
+                          className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors mr-2"
+                        >
+                          <Coins className="w-3 h-3" />
+                          FUND
+                        </Link>
                         <a
                           href={repo.url}
                           target="_blank"
@@ -253,6 +353,44 @@ export default function DashboardPage() {
               Connect New Repository
             </Button>
           </Link>
+        </div>
+
+        {/* Recent History Sidebar */}
+        <div className="border border-gray-400 rounded-2xl md:rounded-3xl px-4 md:px-6 py-4 md:py-6 bg-white self-start">
+          <div className="mb-4">
+            <h3 className="text-black text-sm md:text-[16px] font-bold">
+              Recent Payouts
+            </h3>
+            <p className="text-gray-400 text-xs md:text-[12px]">
+              Latest rewards across your repos
+            </p>
+          </div>
+          {history.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 font-medium text-xs">
+              No recent payouts to show.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {history.map((item, idx) => (
+                <div key={idx} className="border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-bold text-black truncate max-w-[120px]">
+                      {item.repo}
+                    </span>
+                    <span className="text-[10px] font-extrabold text-green-700">
+                      +{item.amount} NEAR
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-500">PR #{item.prNumber}</span>
+                    <span className="text-[10px] text-slate-400">
+                      {mounted ? new Date(item.timestamp).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

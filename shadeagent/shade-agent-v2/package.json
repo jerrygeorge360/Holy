@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
+    "dev": "dotenv -e .env.local -- tsx src/index.ts",
     "start": "tsx dist/index.js"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "@types/node": "^20.0.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "dotenv-cli": "^11.0.0",
     "typescript": "^5.0.0"
   }
 }

@@ -56,17 +56,14 @@ router.post("/attach", async (req: Request, res: Response) => {
 
   // Use requireAuth-like logic manually if not an agent
   if (!isAgent) {
-    // We can't easily call next() in the middle, so we'll just check req.authUserId
-    // which is set by the global middleware if we had one, but we removed it.
-    // So we apply requireAuth manually here.
     return requireAuth(req, res, async () => {
-      await processAttach();
+      await processAttach(false);
     });
   } else {
-    await processAttach();
+    await processAttach(true);
   }
 
-  async function processAttach() {
+  async function processAttach(isAgent: boolean) {
     if (!repo || (!amount && (!issueNumber || !prNumber)) || (!issueNumber && !prNumber)) {
       return res.status(400).json({
         error: "repo and either (amount + issue/PR) or (issue + PR for linking) are required",
@@ -83,9 +80,11 @@ router.post("/attach", async (req: Request, res: Response) => {
         return res.status(404).json({ error: "Repository not found" });
       }
 
-      // Only check ownership if a real user is calling, not the agent
-      if (!isAgent && repository.ownerId !== req.authUserId) {
-        return res.status(403).json({ error: "You do not own this repository" });
+      // Only allow repo owner/maintainer to set custom bounty (not agent)
+      if (!isAgent && amount) {
+        if (repository.ownerId !== req.authUserId) {
+          return res.status(403).json({ error: "You do not own this repository" });
+        }
       }
 
       const existingBounty = await prisma.bounty.findFirst({
@@ -96,12 +95,18 @@ router.post("/attach", async (req: Request, res: Response) => {
         },
       });
 
-      const bounty = existingBounty
-        ? await prisma.bounty.update({
+      let bounty;
+      if (existingBounty) {
+        // Only allow update if owner/maintainer or agent
+        if (!isAgent && repository.ownerId !== req.authUserId) {
+          return res.status(403).json({ error: "You do not own this repository" });
+        }
+        bounty = await prisma.bounty.update({
           where: { id: existingBounty.id },
           data: { amount: String(amount), status: "open" },
-        })
-        : await prisma.bounty.create({
+        });
+      } else {
+        bounty = await prisma.bounty.create({
           data: {
             repoId: repository.id,
             issueNumber: issueNumber ? Number(issueNumber) : null,
@@ -110,6 +115,7 @@ router.post("/attach", async (req: Request, res: Response) => {
             status: "open",
           },
         });
+      }
 
       return res.status(201).json({ bounty });
     } catch (err) {
@@ -195,7 +201,7 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
       return res.status(404).json({ error: "Repository not found" });
     }
 
-    const bounty = await prisma.bounty.findFirst({
+    let bounty = await prisma.bounty.findFirst({
       where: {
         repoId: repository.id,
         prNumber: Number(prNumber),
@@ -203,11 +209,21 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
       },
     });
 
-    // We return the githubToken only if requested by the agent with the secret
+    // If no bounty exists and agent is requesting, auto-create with default amount
+    if (!bounty && agentSecret === config.maintainerSecret) {
+      bounty = await prisma.bounty.create({
+        data: {
+          repoId: repository.id,
+          prNumber: Number(prNumber),
+          amount: "0.1",
+          status: "open",
+        },
+      });
+    }
+
     const githubToken = agentSecret === config.maintainerSecret ? repository.owner?.githubToken : null;
 
     if (!bounty) {
-      // Restore 404 for standard users. Agent can still get the token even if no bounty.
       if (agentSecret === config.maintainerSecret) {
         return res.json({ bounty: null, githubToken });
       }
@@ -218,6 +234,40 @@ router.get("/:owner/:repo/pr/:prNumber", async (req: Request, res: Response) => 
   } catch (err) {
     console.error("Get bounty for PR error:", err);
     return res.status(500).json({ error: "Failed to fetch bounty" });
+  }
+});
+
+/**
+ * @swagger
+ * /api/bounty/explore:
+ *   get:
+ *     summary: List all open bounties across all repositories (Public)
+ *     tags: [Bounties]
+ *     responses:
+ *       200:
+ *         description: List of open bounties with repo details
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/explore", async (_req: Request, res: Response) => {
+  try {
+    const bounties = await prisma.bounty.findMany({
+      where: { status: "open" },
+      include: {
+        repository: {
+          select: {
+            fullName: true,
+            url: true,
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({ bounties });
+  } catch (err) {
+    console.error("Explore bounties error:", err);
+    return res.status(500).json({ error: "Failed to explore bounties" });
   }
 });
 
