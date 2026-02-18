@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
-import { prisma } from "../../lib/prisma.js";
+import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { config } from "../config/index.js";
 
