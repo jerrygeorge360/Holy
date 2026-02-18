@@ -1,0 +1,19 @@
+{
+  "name": "holy",
+  "description": "Decentralized, AI-driven code review and bounty platform built on NEAR Blockchain",
+  "author": "Jerry George",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jerrygeorge360/Holy.git"
+  },
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:agent": "cd shadeagent/shade-agent-v2 && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:agent\" --names \"BACKEND,FRONTEND,AGENT\" --prefix-colors \"blue,magenta,green\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
