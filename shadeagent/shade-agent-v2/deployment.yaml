@@ -88,7 +88,7 @@ approve_ppids:
 # Optional, if not enabled the current docker-compose.yaml file will be used
 # Only applicable if the environment is TEE
 build_docker_image:
-  enabled: true
+  enabled: false
   # Fill this out with the docker tag you want to use. For example: pivortex/my-first-agent
   tag: jerrygeorge/holy
   cache: true
