@@ -1,5 +1,5 @@
 # environment: local | TEE
-environment: local
+environment: TEE
 
 # network: testnet | mainnet
 network: testnet
@@ -17,9 +17,9 @@ agent_contract:
   # and it's assumed the agent contract is already deployed to the contract_id
   # and is initialized
   deploy_custom:
-    enabled: true
+    enabled: false
     # Amount to fund the agent contract with in NEAR
-    funding_amount: 10
+    funding_amount: 8
     # If true the key for contract account will be deleted after deployment locking it
     delete_key: false
 
@@ -30,7 +30,7 @@ agent_contract:
       source_path: ./agent-contract
     # Option 2: Use pre-built WASM file
     deploy_from_wasm:
-      enabled: true
+      enabled: false
       wasm_path:  ./agent-contract/target/near/shade_contract_template.wasm
     # Option 3: Use a deployed global contract, specifying it by its hash
     use_global_by_hash:
@@ -39,7 +39,7 @@ agent_contract:
 
     # Optional, if not enabled the contract will not be initialized
     init:
-      enabled: true
+      enabled: false
       method_name: new
       # <REQUIRES_TEE> will be replaced wil true or false depending on the environment selected
       # <7_DAYS> will be replaced with 7 days in milliseconds
@@ -98,7 +98,7 @@ build_docker_image:
 # Optional, if not enabled the app will not be deployed to Phala Cloud
 # Only applicable if the environment is TEE
 deploy_to_phala:
-  enabled: false
+  enabled: true
   app_name: holy-bounty-agent
   env_file_path: ./.env
 

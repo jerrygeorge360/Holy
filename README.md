@@ -1,108 +1,127 @@
-# Holy: The AI Code Review & Bounty Protocol
 
-**Holy** is a decentralized, AI-driven code review and bounty platform built on the **NEAR Blockchain**. It empowers maintainers to automate high-quality code reviews and reward contributors instantly upon merge, all within a secure, Trusted Execution Environment (TEE).
 
----
+# Holy: AI-Powered Code Review & Bounty Platform
 
-## Vision
-Bridge the gap between open-source contributions and fair compensation. Holy acts as an autonomous agent that monitors your repository, providing deep AI-driven insights and handling financial payouts with zero manual intervention.
-
-## Key Features
-
-### Autonomous AI Reviews
-- Integrated with Groq, OpenAI, and DeepSeek for lightning-fast, high-context reviews.
-- Custom review criteria per repository.
-- **Bounty Alerts**: The agent automatically detects bounties and notifies contributors in the PR.
-
-### Blockchain-Powered Bounties
-- **Instant Payouts**: Funds are released from a NEAR smart contract only when a maintainer merges a PR.
-- **Multi-Bounty Support**: Attach bounties to Issues to attract talent, or directly to PRs for rewards.
-- **Auto-Linking**: PRs containing "Fixes #123" are automatically linked to existing issue bounties.
-
-### GitHub Slash Commands
-- **`/bounty 10`**: Set a bounty on an issue directly from a GitHub comment.
-- **`/link-wallet name.testnet`**: Contributors can link their NEAR wallet in seconds.
-
-### Trusted Execution Environment (TEE)
-- Sensitive operations (payouts and private key management) occur within a Phala TEE.
-- Tamper-proof logs and secure key isolation for the Shade Agent.
+Holy is a decentralized, AI-driven code review and bounty platform built on the NEAR blockchain. It automates code reviews, bounty management, and instant payouts for open-source projects.
 
 ---
 
-## Architecture: The "Triple Handshake"
+## Features
 
-Holy operates through a seamless coordination between three layers:
-
-1.  **Backend (Prisma + Express)**: Manages the source of truth, user auth, and repository metadata.
-2.  **Shade Agent (TEE + AI)**: The autonomous worker that listens to GitHub webhooks, reviews code, and pings the blockchain.
-3.  **NEAR Protocol (Smart Contracts)**: The trustless vault that holds and releases funds based on the Agent's signature.
-
-```mermaid
-graph TD
-    Maintainer -- "1. Attach Bounty" --> BE[Backend]
-    Maintainer -- "2. Fund Pool" --> NEAR[NEAR Contract]
-    Developer -- "3. Open PR #42" --> GH[GitHub]
-    GH -- "4. Webhook Event" --> SA[Shade Agent]
-    SA -- "5. Get Metadata" --> BE
-    SA -- "6. Post AI Review" --> GH
-    Maintainer -- "7. Merge PR" --> GH
-    GH -- "8. Merge Event" --> SA
-    SA -- "9. Execute Payout" --> NEAR
-    NEAR -- "10. Status Paid" --> BE
-```
+- **AI Code Reviews**: Automated, customizable reviews for every PR.
+- **Bounty Automation**: Attach bounties to issues/PRs and pay contributors instantly on merge.
+- **NEAR Blockchain Integration**: Trustless, on-chain payouts.
+- **GitHub Slash Commands**: `/bounty <amount>`, `/link-wallet <wallet>` for easy bounty and wallet management.
+- **Secure Shade Agent**: Runs in a Trusted Execution Environment (TEE) for key isolation and tamper-proof payouts.
 
 ---
 
-## Getting Started
+## Local Development Setup
 
-### 1. Prerequisites
-- **Node.js 18+**
-- **PostgreSQL**
-### 2. Installation
+### Prerequisites
+- Node.js 18+
+- PostgreSQL
+
+### 1. Clone & Install
+
 ```bash
-# Clone the repo
 git clone https://github.com/jerrygeorge360/Holy.git
-cd Holy	
+cd Holy
 
-# Install dependencies for both services
+# Backend
 cd backend && npm install
-cd ../shadeagent/shade-agent-v2 && npm install
+
+# Frontend
+cd ../frontend/nyx-frontend && npm install
+
+# Shade Agent
+cd ../../shadeagent/shade-agent-v2 && npm install
 ```
 
-### 3. Environment Setup
-Create a `.env` in both folders (see `.env.example` in each directory).
-Key variables needed: `GITHUB_WEBHOOK_SECRET`, `MAINTAINER_SECRET`, `NEAR_ACCOUNT_ID`.
+### 2. Environment Variables
+
+Copy `.env.example` to `.env.local` in each of:
+- `backend/`
+- `frontend/nyx-frontend/`
+- `shadeagent/shade-agent-v2/`
+
+Edit `backend/.env.local`:
+```
+SHADE_AGENT_URL=http://localhost:4002
+```
+Edit `shadeagent/shade-agent-v2/.env.local` as needed for NEAR and backend URLs.
+
+### 3. Start All Services
+
+
+#### Start Shade Agent
+```bash
+cd shadeagent/shade-agent-v2
+npm run dev
+# Runs on http://localhost:4002
+```
+
+#### Expose Shade Agent with ngrok
+You need to expose your local Shade Agent to the internet so GitHub webhooks can reach it. Use [ngrok](https://ngrok.com/) for this:
+
+```bash
+ngrok http 3000
+# Copy the https://...ngrok-free.app URL from the output
+```
+
+#### Update Backend to Use ngrok URL
+Edit `backend/.env.local` and set:
+```
+SHADE_AGENT_URL=<your-ngrok-url>
+# Example:
+# SHADE_AGENT_URL=https://xxxx-xxx-xxx-xxx.ngrok-free.app
+```
+
+> **Note:**
+> - Always update `SHADE_AGENT_URL` in `backend/.env.local` to the latest ngrok URL each time you restart ngrok.
+> - Edit `shadeagent/shade-agent-v2/.env.local` as needed for NEAR and backend URLs.
+
+#### Start Backend
+```bash
+cd ../../backend
+npm run dev
+# Runs on http://localhost:3001
+```
+
+#### Start Frontend
+```bash
+cd ../frontend/nyx-frontend
+npm run dev
+# Runs on http://localhost:3002
+```
 
 ---
 
-## Testing the Flow
+## Usage
 
-### Manual API Testing
-Use the following endpoints to test the system end-to-end:
-
-| Step | Action | Endpoint | Auth |
-| :--- | :--- | :--- | :--- |
-| 1 | **Connect Repo** | `POST /api/repos/connect` | User JWT |
-| 2 | **Link Wallet** | `PUT /api/repos/owner/repo` | User JWT |
-| 3 | **Attach Bounty** | `POST /api/bounty/attach` | User JWT / Agent Secret |
-| 4 | **Get Issues** | `GET /api/repos/owner/repo/issues` | User JWT |
-| 5 | **Manual Release**| `POST /api/bounty/release` | Agent Secret |
-
-### Live GitHub Testing
-1. **Comment `/bounty 0.5`** on any GitHub issue. The bot will automatically sync this to the backend.
-2. **Open a PR** with "Fixes #IssueNumber". The bot will announce the bounty and review the code.
-3. **Merge the PR**. The NEAR payout will be triggered automatically.
+1. Connect your GitHub repo via the dashboard.
+2. Fund your repo's bounty pool (see dashboard instructions).
+3. Attach bounties to issues or PRs using slash commands or the dashboard.
+4. Contributors link their NEAR wallet with `/link-wallet <wallet>` in a PR or comment.
+5. When a PR is merged, the agent reviews, then pays out the bounty automatically.
 
 ---
+
 
 ## Directory Structure
-- `backend/`: Express server, Prisma schemas, and API routes.
-- `shadeagent/`: The Shade Agent V2 template, including AI services and NEAR blockchain logic.
-- `frontend/`: (In Progress) Next.js dashboard for maintainers.
 
-## Documentation
-- [Comprehensive API Guide](.brain/api_documentation.md)
-- [Shade Agent README](shadeagent/shade-agent-v2/README.md)
+- `backend/` — Express API, Prisma, PostgreSQL
+- `frontend/nyx-frontend/` — Next.js dashboard
+- `shadeagent/shade-agent-v2/` — Shade Agent (AI, blockchain, TEE)
 
 ---
+
+## Docs & References
+
+- [API Documentation](API_DOCUMENTATION.md)
+- [Shade Agent README](shadeagent/shade-agent-v2/README.md)
+- [Backend README](backend/README.md)
+
+---
+
 **Maintained by jerrygeorge360**

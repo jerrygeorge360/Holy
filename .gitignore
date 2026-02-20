@@ -104,3 +104,5 @@ dist/
 build/
 .cache/
 .turbo/
+
+shade-agent-key.txt
