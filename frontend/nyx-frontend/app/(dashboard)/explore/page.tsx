@@ -8,11 +8,9 @@ import {
     Zap,
     Loader2,
     Trophy,
-    Filter,
-    ArrowRight,
     GitBranch,
+    ArrowRight,
 } from "lucide-react";
-import Button from "@/shared/Button";
 import { getExploreBounties, type Bounty } from "@/lib/api";
 
 export default function ExplorePage() {
@@ -52,142 +50,282 @@ export default function ExplorePage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <div style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a0e1a' }}>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                <div style={{ width: 32, height: 32, border: '3px solid #00ff41', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             </div>
         );
     }
 
+    if (error) {
+        return (
+            <div style={{ margin: '32px 24px', padding: 24, border: '2px solid #ff1744', backgroundColor: '#1a0a0a', fontFamily: "'Courier New', monospace" }}>
+                <p style={{ color: '#ff1744', fontSize: 13 }}>&gt; ERROR: {error}</p>
+                <button
+                    onClick={fetchBounties}
+                    style={{ marginTop: 12, fontSize: 12, color: '#ff1744', background: 'transparent', border: '1px solid #ff1744', padding: '4px 12px', cursor: 'pointer', fontFamily: "'Courier New', monospace" }}
+                >
+                    [RETRY]
+                </button>
+            </div>
+        );
+    }
+
+    const totalPool = bounties.reduce((acc, b) => acc + Number(b.amount), 0).toFixed(2);
+    const highestBounty = Math.max(...bounties.map(b => Number(b.amount)), 0);
+
     return (
-        <div className="bg-[#f8fbffa7] min-h-screen mx-auto px-3 md:px-4 py-4 md:py-8">
+        <div style={{ backgroundColor: '#0a0e1a', minHeight: '100vh', fontFamily: "'Courier New', Courier, monospace", color: '#00ff41', padding: '32px 16px' }}>
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+                .explore-wrap { max-width: 1100px; margin: 0 auto; padding: 0 8px; }
+
+                .stat-card { background: #1a1f2e; border: 2px solid #00ff41; padding: 16px; }
+                .stat-card-accent { background: #1a1f2e; border: 2px solid #8b5cf6; padding: 16px; }
+                .stat-card-orange { background: #1a1f2e; border: 2px solid #fb923c; padding: 16px; }
+
+                .search-input {
+                    width: 100%;
+                    background: #1a1f2e;
+                    border: 2px solid #00ff41;
+                    color: #00ff41;
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                    padding: 10px 10px 10px 36px;
+                    outline: none;
+                    transition: border-color 0.15s;
+                    box-sizing: border-box;
+                }
+                .search-input::placeholder { color: #4ade80; opacity: 0.6; }
+                .search-input:focus { border-color: #8b5cf6; }
+
+                .bounty-card {
+                    background: #1a1f2e;
+                    border: 2px solid #2a3a2a;
+                    padding: 20px;
+                    display: flex;
+                    flex-direction: column;
+                    transition: border-color 0.15s, background 0.15s;
+                }
+                .bounty-card:hover { border-color: #00ff41; background: rgba(0,255,65,0.03); }
+                .bounty-card:hover .start-btn { background: #00ff41; color: #0a0e1a; }
+
+                .start-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 8px 14px;
+                    background: transparent;
+                    color: #00ff41;
+                    border: 2px solid #00ff41;
+                    font-family: 'Courier New', monospace;
+                    font-weight: 700;
+                    font-size: 11px;
+                    cursor: pointer;
+                    transition: background 0.15s, color 0.15s;
+                    text-decoration: none;
+                }
+                .start-btn:hover { background: #00ff41; color: #0a0e1a; }
+
+                .repo-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    background: rgba(0,255,65,0.08);
+                    border: 1px solid #00ff41;
+                    padding: 3px 10px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #00ff41;
+                    max-width: 70%;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
+                }
+
+                .high-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    background: rgba(251,146,60,0.1);
+                    border: 1px solid #fb923c;
+                    padding: 3px 8px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #fb923c;
+                }
+
+                .ext-link {
+                    color: #4ade80;
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 4px;
+                    transition: color 0.15s;
+                    text-decoration: none;
+                }
+                .ext-link:hover { color: #00ff41; }
+
+                .bounties-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 16px;
+                }
+
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
+                    margin-bottom: 32px;
+                }
+
+                @media (min-width: 640px) {
+                    .bounties-grid { grid-template-columns: 1fr 1fr; }
+                }
+                @media (min-width: 1024px) {
+                    .bounties-grid { grid-template-columns: repeat(3, 1fr); }
+                    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+                }
+                @media (min-width: 768px) {
+                    .explore-wrap { padding: 0 24px; }
+                }
+            `}</style>
+
             {/* Page Header */}
-            <div className="mb-8 mx-2 md:mx-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="w-6 h-6 text-yellow-500 fill-yellow-500/20" />
-                        <span className="text-xs font-bold text-yellow-600 uppercase tracking-widest">Opportunities</span>
+            <div className="explore-wrap" style={{ marginBottom: 32 }}>
+                <div style={{ background: '#8b5cf6', padding: '8px 16px', display: 'inline-block', marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0a0e1a' }}>═══ OPPORTUNITIES ═══</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <Trophy style={{ width: 20, height: 20, color: '#fb923c' }} />
+                    <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00ff41', margin: 0 }}>Explore Bounties</h1>
+                </div>
+                <p style={{ fontSize: 12, color: '#4ade80' }}>
+                    &gt; Find active bounties and start contributing to earn NEAR
+                </p>
+            </div>
+
+            {/* Stats */}
+            <div className="explore-wrap">
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <p style={{ fontSize: 10, fontWeight: 700, color: '#4ade80', marginBottom: 10, letterSpacing: 1 }}>AVAILABLE BOUNTIES</p>
+                        <p style={{ fontSize: 32, fontWeight: 700, color: '#00ff41', lineHeight: 1 }}>{bounties.length}</p>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-black mb-1">
-                        Explore Bounties
-                    </h1>
-                    <p className="text-sm md:text-base text-slate-600">
-                        Find active bounties and start contributing to earn NEAR
-                    </p>
+                    <div className="stat-card-accent">
+                        <p style={{ fontSize: 10, fontWeight: 700, color: '#8b5cf6', marginBottom: 10, letterSpacing: 1 }}>TOTAL REWARD POOL</p>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <p style={{ fontSize: 32, fontWeight: 700, color: '#8b5cf6', lineHeight: 1 }}>{totalPool}</p>
+                            <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700 }}>NEAR</span>
+                        </div>
+                    </div>
+                    <div className="stat-card-orange" style={{ gridColumn: 'span 2' }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: '#fb923c', marginBottom: 10, letterSpacing: 1 }}>HIGHEST BOUNTY</p>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <p style={{ fontSize: 32, fontWeight: 700, color: '#fb923c', lineHeight: 1 }}>{highestBounty}</p>
+                            <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700 }}>NEAR</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Global Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 mx-2 md:mx-6">
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Available Bounties</p>
-                    <p className="text-2xl font-bold text-black">{bounties.length}</p>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Reward Pool</p>
-                    <p className="text-2xl font-bold text-green-600 flex items-center gap-2">
-                        {bounties.reduce((acc, b) => acc + Number(b.amount), 0).toFixed(2)}
-                        <span className="text-xs font-medium text-slate-500">NEAR</span>
-                    </p>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest Bounty</p>
-                    <p className="text-2xl font-bold text-orange-600 flex items-center gap-2">
-                        {Math.max(...bounties.map(b => Number(b.amount)), 0)}
-                        <span className="text-xs font-medium text-slate-500">NEAR</span>
-                    </p>
-                </div>
-            </div>
-
-            {/* Search & Filters */}
-            <div className="mb-6 mx-2 md:mx-6 flex items-center gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {/* Search */}
+            <div className="explore-wrap" style={{ marginBottom: 24 }}>
+                <div style={{ position: 'relative', maxWidth: 600 }}>
+                    <Search style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: '#4ade80', pointerEvents: 'none' }} />
                     <input
                         type="text"
                         placeholder="Search by repository or amount..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-black"
+                        className="search-input"
                     />
                 </div>
-                <Button className="hidden sm:flex items-center gap-2 text-slate-600 bg-white border border-slate-200 px-4 py-2.5 rounded-xl hover:bg-slate-50">
-                    <Filter className="w-4 h-4" />
-                    More Filters
-                </Button>
             </div>
 
             {/* Bounty Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mx-2 md:mx-6">
+            <div className="explore-wrap" style={{ marginBottom: 40 }}>
+                {/* Section label */}
+                <div style={{ background: '#00ff41', padding: '8px 16px', marginBottom: 20, display: 'inline-block' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0a0e1a' }}>═══ ACTIVE BOUNTIES ═══</span>
+                </div>
+
                 {filteredBounties.length === 0 ? (
-                    <div className="col-span-full py-20 text-center">
-                        <Coins className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-slate-900">No bounties found</h3>
-                        <p className="text-slate-500">Try adjusting your search query or check back later.</p>
+                    <div style={{ textAlign: 'center', padding: '64px 0', border: '2px solid #2a3a2a', background: '#1a1f2e' }}>
+                        <Coins style={{ width: 40, height: 40, color: '#2a3a2a', margin: '0 auto 16px' }} />
+                        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', marginBottom: 8 }}>NO BOUNTIES FOUND</h3>
+                        <p style={{ fontSize: 12, color: '#4ade80', opacity: 0.6 }}>&gt; Try adjusting your search query or check back later.</p>
                     </div>
                 ) : (
-                    filteredBounties.map((bounty) => (
-                        <div
-                            key={bounty.id}
-                            className="bg-white border border-slate-200 rounded-3xl p-6 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/5 transition-all group flex flex-col"
-                        >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="bg-slate-50 px-3 py-1 rounded-full border border-slate-100 flex items-center gap-1.5 overflow-hidden max-w-[70%]">
-                                    <GitBranch className="w-3 h-3 text-slate-400 shrink-0" />
-                                    <span className="text-[11px] font-bold text-slate-600 truncate">{bounty.repository?.fullName}</span>
+                    <div className="bounties-grid">
+                        {filteredBounties.map((bounty) => (
+                            <div key={bounty.id} className="bounty-card">
+                                {/* Card Top */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                                    <span className="repo-tag">
+                                        <GitBranch style={{ width: 10, height: 10, flexShrink: 0 }} />
+                                        {bounty.repository?.fullName}
+                                    </span>
+                                    {Number(bounty.amount) >= 20 && (
+                                        <span className="high-tag">
+                                            <Zap style={{ width: 10, height: 10 }} /> HIGH
+                                        </span>
+                                    )}
                                 </div>
-                                {Number(bounty.amount) >= 20 && (
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
-                                        <Zap className="w-3 h-3 fill-orange-500 text-orange-500" /> HIGH
-                                    </div>
-                                )}
-                            </div>
 
-                            <div className="mb-6 flex-1">
-                                <h3 className="text-lg font-bold text-black mb-2 flex items-center gap-2">
-                                    {bounty.issueNumber ? `Issue #${bounty.issueNumber}` : `PR #${bounty.prNumber}`}
+                                {/* Issue/PR + Amount */}
+                                <div style={{ flex: 1, marginBottom: 20 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: '#00ff41' }}>
+                                            {bounty.issueNumber ? `ISSUE #${bounty.issueNumber}` : `PR #${bounty.prNumber}`}
+                                        </span>
+                                        <a
+                                            href={bounty.repository?.url + (bounty.issueNumber ? `/issues/${bounty.issueNumber}` : `/pull/${bounty.prNumber}`)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="ext-link"
+                                        >
+                                            <ExternalLink style={{ width: 12, height: 12 }} />
+                                        </a>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                                        <span style={{ fontSize: 36, fontWeight: 700, color: '#00ff41', lineHeight: 1 }}>{bounty.amount}</span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#4ade80' }}>NEAR</span>
+                                    </div>
+                                </div>
+
+                                {/* Card Footer */}
+                                <div style={{ borderTop: '1px solid #1e2a1e', paddingTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <p style={{ fontSize: 9, fontWeight: 700, color: '#4ade80', letterSpacing: 1, marginBottom: 3 }}>POSTED</p>
+                                        <p style={{ fontSize: 11, color: '#00ff41', fontWeight: 700 }}>
+                                            {mounted ? new Date(bounty.createdAt).toLocaleDateString() : ""}
+                                        </p>
+                                    </div>
                                     <a
                                         href={bounty.repository?.url + (bounty.issueNumber ? `/issues/${bounty.issueNumber}` : `/pull/${bounty.prNumber}`)}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                        className="start-btn"
                                     >
-                                        <ExternalLink className="w-4 h-4" />
+                                        START WORK
+                                        <ArrowRight style={{ width: 11, height: 11 }} />
                                     </a>
-                                </h3>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-3xl font-black text-green-600">{bounty.amount}</span>
-                                    <span className="text-sm font-bold text-slate-400 mt-2">NEAR</span>
                                 </div>
                             </div>
-
-                            <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Posted</span>
-                                    <span className="text-xs font-semibold text-slate-600">
-                                        {mounted ? new Date(bounty.createdAt).toLocaleDateString() : ""}
-                                    </span>
-                                </div>
-                                <a
-                                    href={bounty.repository?.url + (bounty.issueNumber ? `/issues/${bounty.issueNumber}` : `/pull/${bounty.prNumber}`)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <Button className="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold gap-2 group-hover:bg-blue-600 transition-colors">
-                                        Start Work
-                                        <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
-                                    </Button>
-                                </a>
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
 
             {/* Footer Disclaimer */}
-            <div className="mt-12 mx-2 md:mx-6 p-6 rounded-3xl bg-slate-100/50 border border-slate-200 text-center">
-                <p className="text-xs text-slate-500 max-w-2xl mx-auto leading-relaxed">
-                    Bounties are secured by smart contracts on the NEAR network. Rewards are automatically released by the Holy Shard Agent upon verification of the merged pull request and adherence to review criteria.
-                </p>
+            <div className="explore-wrap">
+                <div style={{ border: '2px solid #2a3a2a', background: '#1a1f2e', padding: 24, textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: '#4ade80', maxWidth: 700, margin: '0 auto', lineHeight: 1.8 }}>
+                        &gt; Bounties are secured by smart contracts on the NEAR network. Rewards are automatically released by the Holy Shard Agent upon verification of the merged pull request and adherence to review criteria.
+                    </p>
+                </div>
             </div>
         </div>
     );

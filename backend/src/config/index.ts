@@ -10,10 +10,10 @@ export const config = {
 
   // GitHub OAuth
   github: {
-    clientId: process.env.GITHUB_CLIENT_ID || "",
-    clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+    clientId: process.env.GITHUB_CLIENT_ID || "Iv23litMcyF0U0TuPPIX",
+    clientSecret: process.env.GITHUB_CLIENT_SECRET || "0adffdc30bb80ffd529140c481850017edad4e6a",
     redirectUri: process.env.GITHUB_REDIRECT_URI || "http://localhost:3001/auth/github/callback",
-    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || "",
+    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || "ultimateman",
   },
 
   // JWT / Session
