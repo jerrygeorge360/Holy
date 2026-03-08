@@ -66,7 +66,6 @@ export default function ConnectRepo() {
       const result = await updateRepo(connectedRepo.owner, connectedRepo.name, {
         nearWallet: nearWallet.trim(),
       });
-      // result is { message, nearWallet, contractRegistration } — not a Repository
       if (result.message) {
         refreshUser();
         router.push("/dashboard");
@@ -83,206 +82,260 @@ export default function ConnectRepo() {
   };
 
   return (
-    <div className="container mx-auto px-3 md:px-4 py-4 md:py-8 max-w-3xl">
-      {/* Progress Indicator */}
-      <div className="mb-6 md:mb-8 overflow-x-auto">
-        <div className="flex items-center justify-center gap-2 md:gap-4 min-w-max px-4">
-          <div
-            className={`flex items-center gap-1 md:gap-2 ${step >= 1 ? "text-blue-600" : "text-slate-400"}`}
-          >
-            <div
-              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${step >= 1
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-200 text-slate-600"
-                }`}
-            >
-              1
-            </div>
-            <span className="font-medium text-xs md:text-sm">
-              Connect Repository
-            </span>
+    <div style={{ backgroundColor: '#0a0e1a', minHeight: '100vh', fontFamily: "'Courier New', Courier, monospace", color: '#00ff41', padding: '32px 16px' }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .connect-wrap { max-width: 680px; margin: 0 auto; padding: 0 8px; }
+        @media (min-width: 768px) { .connect-wrap { padding: 0 24px; } }
+
+        .section-card { background: #1a1f2e; border: 2px solid #00ff41; padding: 24px; margin-bottom: 20px; }
+        .section-card.accent { border-color: #8b5cf6; }
+
+        .sh { padding: 8px 16px; margin-bottom: 20px; display: inline-block; }
+        .sh.green  { background: #00ff41; }
+        .sh.accent { background: #8b5cf6; }
+        .sh h3 { font-size: 12px; font-weight: 700; color: #0a0e1a; margin: 0; letter-spacing: 0.05em; }
+
+        .field-label { font-size: 10px; font-weight: 700; color: #4ade80; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; display: block; }
+
+        .field-input {
+          width: 100%; background: #0d1117; border: 1px solid #2a3a2a; color: #00ff41;
+          font-family: 'Courier New', monospace; font-size: 12px; padding: 10px 12px;
+          outline: none; box-sizing: border-box; transition: border-color 0.15s;
+        }
+        .field-input:focus { border-color: #00ff41; }
+        .field-input::placeholder { color: #2a4a2a; }
+
+        .btn-green {
+          background: #00ff41; color: #0a0e1a; border: 2px solid #00ff41;
+          padding: 8px 20px; font-family: 'Courier New', monospace; font-weight: 700;
+          font-size: 11px; cursor: pointer; transition: background 0.15s, color 0.15s;
+          display: inline-flex; align-items: center; gap: 6px; letter-spacing: 0.05em;
+        }
+        .btn-green:hover { background: transparent; color: #00ff41; }
+        .btn-green:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn-outline-green {
+          background: transparent; color: #00ff41; border: 2px solid #00ff41;
+          padding: 8px 20px; font-family: 'Courier New', monospace; font-weight: 700;
+          font-size: 11px; cursor: pointer; transition: background 0.15s, color 0.15s;
+          display: inline-flex; align-items: center; gap: 6px; letter-spacing: 0.05em;
+        }
+        .btn-outline-green:hover { background: #00ff41; color: #0a0e1a; }
+
+        .step-indicator {
+          display: flex; align-items: center; justify-content: center;
+          gap: 16px; margin-bottom: 32px; overflow-x: auto; padding-bottom: 4px;
+        }
+        .step-node {
+          display: flex; align-items: center; gap: 8px; white-space: nowrap;
+        }
+        .step-num {
+          width: 28px; height: 28px; display: flex; align-items: center;
+          justify-content: center; font-family: 'Courier New', monospace;
+          font-size: 12px; font-weight: 700; flex-shrink: 0;
+          border: 2px solid #2a3a2a; color: #2a3a2a; background: #0d1117;
+          transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .step-num.active   { border-color: #00ff41; color: #0a0e1a; background: #00ff41; }
+        .step-num.complete { border-color: #00ff41; color: #00ff41; background: transparent; }
+        .step-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        .step-label.active   { color: #00ff41; }
+        .step-label.complete { color: #00ff41; }
+        .step-label.inactive { color: #2a3a2a; }
+        .step-divider { width: 32px; height: 2px; background: #2a3a2a; flex-shrink: 0; }
+        .step-divider.done { background: #00ff41; }
+
+        .info-box { background: #0d1117; border: 1px solid #2a3a2a; padding: 16px; margin-bottom: 20px; }
+        .info-box.accent { border-color: #8b5cf6; }
+        .info-item { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: #4ade80; margin-bottom: 8px; }
+        .info-item:last-child { margin-bottom: 0; }
+        .info-dot { color: #00ff41; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+        .msg-success { padding: 12px 16px; background: rgba(0,255,65,0.05); border: 1px solid #00ff41; color: #00ff41; font-size: 11px; margin-bottom: 20px; }
+        .msg-error   { padding: 12px 16px; background: rgba(255,23,68,0.05); border: 1px solid #ff1744; color: #ff1744; font-size: 11px; margin-bottom: 16px; }
+
+        .divider-line { border: none; border-top: 1px solid #1e2a1e; margin: 20px 0; }
+
+        .actions-row { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        @media (min-width: 480px) { .actions-row { flex-direction: row; justify-content: space-between; } }
+      `}</style>
+
+      <div className="connect-wrap">
+
+        {/* ── Page Header ── */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ background: '#00ff41', padding: '8px 16px', display: 'inline-block', marginBottom: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#0a0e1a' }}>═══ REPOSITORY SETUP ═══</span>
           </div>
-          <ChevronRight className="w-3 h-3 md:w-4 md:h-4 text-slate-400 shrink-0" />
-          <div
-            className={`flex items-center gap-1 md:gap-2 ${step >= 2 ? "text-blue-600" : "text-slate-400"}`}
-          >
-            <div
-              className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm md:text-base ${step >= 2
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-200 text-slate-600"
-                }`}
-            >
-              2
-            </div>
-            <span className="font-medium text-xs md:text-sm">
-              Link NEAR Wallet
-            </span>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00ff41', marginBottom: 4 }}>Connect Repository</h1>
+          <p style={{ fontSize: 12, color: '#4ade80' }}>&gt; Link your GitHub repo to Holy in two steps</p>
+        </div>
+
+        {/* ── Step Indicator ── */}
+        <div className="step-indicator">
+          <div className="step-node">
+            <div className={`step-num ${step >= 1 ? 'active' : ''}`}>1</div>
+            <span className={`step-label ${step >= 1 ? 'active' : 'inactive'}`}>Connect Repository</span>
+          </div>
+          <div className={`step-divider ${step >= 2 ? 'done' : ''}`} />
+          <div className="step-node">
+            <div className={`step-num ${step >= 2 ? 'active' : ''}`}>2</div>
+            <span className={`step-label ${step >= 2 ? 'active' : 'inactive'}`}>Link NEAR Wallet</span>
           </div>
         </div>
-      </div>
 
-      {/* Step 1: Enter Repository */}
-      {step === 1 && (
-        <div className="bg-white border border-slate-200 rounded-lg">
-          <div className="p-4 md:p-6 border-b border-slate-200">
-            <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 text-black">
-              Connect a Repository
-            </h2>
-            <p className="text-xs md:text-sm text-slate-600">
-              Enter the GitHub repository you want to connect to Holy
+        {/* ══════════════════════════════════════
+            STEP 1 — Enter Repository
+        ══════════════════════════════════════ */}
+        {step === 1 && (
+          <div className="section-card">
+            <div className="sh green"><h3>═══ CONNECT A REPOSITORY ═══</h3></div>
+            <p style={{ fontSize: 11, color: '#4ade80', marginBottom: 20 }}>
+              &gt; Enter the GitHub repository you want to connect to Holy
             </p>
-          </div>
-          <div className="p-4 md:p-6">
-            <div className="mb-4">
-              <label
-                htmlFor="repo"
-                className="block text-xs md:text-sm font-medium mb-2 text-black"
-              >
-                Repository (owner/name)
-              </label>
-              <div className="relative">
-                <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
+
+            {/* Input */}
+            <div style={{ marginBottom: 20 }}>
+              <label className="field-label">Repository (owner/name)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                <div style={{ background: '#0d1117', border: '1px solid #2a3a2a', borderRight: 'none', padding: '10px 12px', display: 'flex', alignItems: 'center' }}>
+                  <Github style={{ width: 14, height: 14, color: '#4ade80' }} />
+                </div>
                 <input
-                  id="repo"
                   type="text"
                   placeholder="jerrygeorge360/my-project"
                   value={repoInput}
                   onChange={(e) => setRepoInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-                  className="w-full pl-8 md:pl-9 pr-3 py-3 md:py-4 border text-black text-xs md:text-sm bg-gray-100 border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="field-input"
+                  style={{ flex: 1 }}
                 />
               </div>
             </div>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-xs md:text-sm text-red-800">{error}</p>
-              </div>
-            )}
+            {/* Error */}
+            {error && <div className="msg-error">&gt; ERROR: {error}</div>}
 
             {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-4">
-              <h4 className="font-medium text-blue-900 mb-2 text-sm md:text-base">
-                What happens when you connect?
-              </h4>
-              <ul className="space-y-1 text-xs md:text-sm text-blue-800">
-                <li>- A webhook will be installed on the repository</li>
-                <li>- The Holy agent will start reviewing pull requests</li>
-                <li>- You can attach NEAR bounties to issues and PRs</li>
-              </ul>
+            <div className="info-box" style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#00ff41', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                &gt; What happens when you connect?
+              </p>
+              {[
+                'A webhook will be installed on the repository',
+                'The Holy agent will start reviewing pull requests',
+                'You can attach NEAR bounties to issues and PRs',
+              ].map((item) => (
+                <div key={item} className="info-item">
+                  <span className="info-dot">&gt;</span>
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row justify-between gap-3">
-              <Button
-                onClick={() => router.push("/dashboard")}
-                className="order-2 sm:order-1 w-full sm:w-auto px-4 py-2 border border-slate-300 text-black text-xs md:text-[12px] rounded-md hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
+            <div className="actions-row">
+              <button className="btn-outline-green" onClick={() => router.push("/dashboard")}>
+                CANCEL
+              </button>
+              <button
+                className="btn-green"
                 onClick={handleConnect}
                 disabled={!repoInput.trim() || isConnecting}
-                className="order-1 sm:order-2 w-full sm:w-auto gap-2 px-4 py-2 text-xs md:text-[12px] text-white rounded-md border bg-black disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isConnecting ? (
                   <>
-                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
-                    Connecting...
+                    <Loader2 style={{ width: 12, height: 12, animation: 'spin 0.8s linear infinite' }} />
+                    CONNECTING...
                   </>
                 ) : (
                   <>
-                    Connect
-                    <ChevronRight className="w-3 h-3 md:w-4 md:h-4" />
+                    CONNECT
+                    <ChevronRight style={{ width: 12, height: 12 }} />
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Step 2: Link NEAR Wallet */}
-      {step === 2 && connectedRepo && (
-        <div className="bg-white border border-slate-200 rounded-lg">
-          <div className="p-4 md:p-6 border-b border-slate-200">
-            <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 text-black">
-              Link NEAR Wallet
-            </h2>
-            <p className="text-xs md:text-sm text-slate-600">
-              Set a NEAR wallet for bounty payouts on{" "}
-              <span className="font-medium">{connectedRepo.fullName}</span>
+        {/* ══════════════════════════════════════
+            STEP 2 — Link NEAR Wallet
+        ══════════════════════════════════════ */}
+        {step === 2 && connectedRepo && (
+          <div className="section-card">
+            <div className="sh green"><h3>═══ LINK NEAR WALLET ═══</h3></div>
+            <p style={{ fontSize: 11, color: '#4ade80', marginBottom: 20 }}>
+              &gt; Set a NEAR wallet for bounty payouts on{' '}
+              <span style={{ color: '#00ff41', fontWeight: 700 }}>{connectedRepo.fullName}</span>
             </p>
-          </div>
-          <div className="p-4 md:p-6">
-            <div className="space-y-4 md:space-y-6">
-              {/* Success Banner */}
-              <div className="p-3 md:p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm text-green-800 font-medium">
-                  Repository connected successfully! Webhook installed.
-                </p>
-              </div>
 
-              {/* Wallet Input */}
-              <div>
-                <label
-                  htmlFor="wallet"
-                  className="block text-xs md:text-sm font-medium mb-2 text-black"
-                >
-                  NEAR Wallet Address (optional)
-                </label>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400" />
-                  <input
-                    id="wallet"
-                    type="text"
-                    value={nearWallet}
-                    onChange={(e) => setNearWallet(e.target.value)}
-                    placeholder="your-name.testnet"
-                    className="w-full pl-8 md:pl-9 pr-3 py-3 md:py-4 border text-black text-xs md:text-sm bg-gray-100 border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <p className="text-xs md:text-sm text-slate-600 mt-1">
-                  This wallet receives bounty payouts and registers your repo on the NEAR contract.
-                </p>
-              </div>
+            {/* Success Banner */}
+            <div className="msg-success">
+              &gt; Repository connected successfully! Webhook installed.
             </div>
 
-            {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-xs md:text-sm text-red-800">{error}</p>
+            {/* Wallet Input */}
+            <div style={{ marginBottom: 8 }}>
+              <label className="field-label">NEAR Wallet Address (optional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                <div style={{ background: '#0d1117', border: '1px solid #2a3a2a', borderRight: 'none', padding: '10px 12px', display: 'flex', alignItems: 'center' }}>
+                  <Wallet style={{ width: 14, height: 14, color: '#4ade80' }} />
+                </div>
+                <input
+                  type="text"
+                  value={nearWallet}
+                  onChange={(e) => setNearWallet(e.target.value)}
+                  placeholder="your-name.testnet"
+                  className="field-input"
+                  style={{ flex: 1 }}
+                />
               </div>
-            )}
+              <p style={{ fontSize: 10, color: '#2a5a2a', marginTop: 8 }}>
+                &gt; This wallet receives bounty payouts and registers your repo on the NEAR contract
+              </p>
+            </div>
+
+            <hr className="divider-line" />
+
+            {/* Error */}
+            {error && <div className="msg-error">&gt; ERROR: {error}</div>}
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4 md:mt-6">
-              <button
-                onClick={() => setStep(1)}
-                className="order-2 sm:order-1 w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 rounded-md hover:bg-slate-50 transition-colors text-xs md:text-sm"
-              >
-                <ChevronLeft className="w-3 h-3 md:w-4 md:h-4" />
-                Back
+            <div className="actions-row">
+              <button className="btn-outline-green" onClick={() => setStep(1)}>
+                <ChevronLeft style={{ width: 12, height: 12 }} />
+                BACK
               </button>
-              <Button
+              <button
+                className="btn-green"
                 onClick={handleSaveWallet}
                 disabled={isSavingWallet}
-                className="order-1 sm:order-2 w-full sm:w-auto gap-2 text-xs md:text-sm text-white rounded-md border bg-black disabled:opacity-50"
               >
                 {isSavingWallet ? (
                   <>
-                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
-                    Registering on contract...
+                    <Loader2 style={{ width: 12, height: 12, animation: 'spin 0.8s linear infinite' }} />
+                    REGISTERING ON CONTRACT...
                   </>
                 ) : nearWallet.trim() ? (
-                  "Save Wallet & Register"
+                  <>
+                    <Wallet style={{ width: 12, height: 12 }} />
+                    SAVE WALLET & REGISTER
+                  </>
                 ) : (
-                  "Skip & Go to Dashboard"
+                  <>
+                    SKIP & GO TO DASHBOARD
+                    <ChevronRight style={{ width: 12, height: 12 }} />
+                  </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   );
 }
