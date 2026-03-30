@@ -5,7 +5,7 @@ environment: local
 network: testnet
 
 # Path to docker-compose file
-docker_compose_path: ./docker-compose.yaml
+docker_compose_path: ../../docker-compose.yml
 
 agent_contract:
   # NEAR Account Id of the contract
