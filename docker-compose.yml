@@ -33,14 +33,16 @@ services:
       - GH_TOKEN=${GH_TOKEN}
       - GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET}
       - MAINTAINER_SECRET=${MAINTAINER_SECRET}
+      - SHADE_AGENT_URL=http://shade-agent-app:3000
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 40s
     networks:
       - nyx-network
 

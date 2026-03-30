@@ -33,6 +33,9 @@ app.use(express.json());
 
 
 app.get("/health", (_req: Request, res: Response) => {
+  if (process.env.DEBUG === "true") {
+    console.log("Health check pulse received");
+  }
   res.status(200).json({ status: "ok" });
 });
 
