@@ -279,3 +279,64 @@ jobs:
         run: |
           docker compose down --volumes --remove-orphans || true
           kill $SHADE_PID 2>/dev/null || true
+  # ─────────────────────────────────────────────────────────
+  # JOB 3: Deploy to Azure VM
+  # ─────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+    needs: integration
+    if: github.ref == 'refs/heads/main'
+    environment: beta
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          script: |
+            set -e
+            
+            PROJECT_DIR="~/Nyx"
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git "$PROJECT_DIR"
+            fi
+            
+            cd "$PROJECT_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Create consolidated .env for Docker Compose
+            cat <<ENVEOF > .env
+            AGENT_CONTRACT_ID=${{ secrets.AGENT_CONTRACT_ID }}
+            SPONSOR_ACCOUNT_ID=${{ secrets.SPONSOR_ACCOUNT_ID }}
+            SPONSOR_PRIVATE_KEY=${{ secrets.SPONSOR_PRIVATE_KEY }}
+            NETWORK_ID=testnet
+            GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+            GH_WEBHOOK_SECRET=${{ secrets.GH_WEBHOOK_SECRET }}
+            GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+            OPENAI_KEY=${{ secrets.OPENAI_KEY }}
+            NEAR_AI_API_KEY=${{ secrets.NEAR_AI_API_KEY }}
+            MAINTAINER_SECRET=${{ secrets.MAINTAINER_SECRET }}
+            DATABASE_URL=postgresql://postgres:postgres@db:5432/nyx_db?schema=public
+            POSTGRES_USER=postgres
+            POSTGRES_PASSWORD=postgres
+            POSTGRES_DB=nyx_db
+            BACKEND_URL=http://nyx-backend:3001
+            BACKEND_CALLBACK_URL=http://nyx-backend:3001/callback
+            ENVEOF
+
+            # Deploy component envs
+            cp .env ./backend/.env
+            cp .env ./frontend/nyx-frontend/.env
+            cp .env ./shadeagent/shade-agent-v2/.env
+
+            # Restart stack
+            docker compose up --build -d
+
+            echo "✅ Deployment successful at \$(date)"
