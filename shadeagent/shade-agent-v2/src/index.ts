@@ -44,13 +44,13 @@ async function start() {
     derivationPath: "default",
   });
   // Fund the agent account so it can exist on-chain and manage keys
-console.log("Funding agent account...");
-await agent.fund(0.1); // 0.2 NEAR
-console.log("Agent funded successfully");
-console.log("Shade agent initialized:", agent.accountId());
-console.log("Registering agent...");
-await agent.register();
-console.log("Agent registered successfully");
+  console.log("Mocking agent funding...");
+  // await agent.fund(0.1); // 0.2 NEAR
+  console.log("Agent funded successfully (MOCK)");
+  console.log("Shade agent initialized:", agent.accountId());
+  console.log("Mocking agent registration...");
+  // await agent.register();
+  console.log("Agent registered successfully (MOCK)");
 
   const app = express();
 

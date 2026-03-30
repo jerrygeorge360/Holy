@@ -76,8 +76,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nyx_db?schema=public
       BACKEND_URL: http://nyx-backend:3001
       BACKEND_CALLBACK_URL: http://nyx-backend:3001/callback
-      FRONTEND_URL: http://localhost:3000
-      AGENT_URL: http://localhost:8083
+      FRONTEND_URL: http://localhost:4700
+      AGENT_URL: http://localhost:4783
 
     steps:
       - name: Checkout
@@ -245,6 +245,7 @@ jobs:
             POSTGRES_DB=nyx_db
             BACKEND_URL=http://nyx-backend:3001
             BACKEND_CALLBACK_URL=http://nyx-backend:3001/callback
+            SHADE_AGENT_URL=http://shade-agent-app:3000
             ENVEOF
 
             # Deploy component envs

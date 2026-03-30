@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-nyx_db}
     ports:
-      - "5432:5432"
+      - "4732:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,7 @@ services:
     container_name: nyx-backend
     restart: always
     ports:
-      - "4000:3001"
+      - "4701:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
@@ -53,10 +53,10 @@ services:
     container_name: nyx-frontend
     restart: always
     ports:
-      - "3000:3000"
+      - "4700:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4701}
     depends_on:
       - nyx-backend
     healthcheck:
@@ -74,7 +74,7 @@ services:
     container_name: shade-agent-app
     restart: always
     ports:
-      - "8083:3000"
+      - "4783:3000"
     environment:
       - DEBUG=true
       - NETWORK_ID=testnet
