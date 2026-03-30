@@ -29,7 +29,7 @@ services:
       - "4701:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nyx_db}?schema=public
       - GH_TOKEN=${GH_TOKEN}
       - GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET}
       - MAINTAINER_SECRET=${MAINTAINER_SECRET}
