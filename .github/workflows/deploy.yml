@@ -211,11 +211,18 @@ jobs:
 
           cat /tmp/shade-deploy.log
 
-      # ── Verify env files ────────────────────────────────
-      - name: Verify env files
+      # ── Verify root .env ───────────────────────────────
+      - name: Verify root .env
         run: |
-          ls -la .env backend/.env frontend/nyx-frontend/.env shadeagent/shade-agent-v2/.env
-          echo "✅ Env files verified"
+          if [ -f .env ]; then
+            echo "✅ Root .env exists"
+            ls -la .env
+            [ -s .env ] || { echo "❌ .env is empty"; exit 1; }
+          else
+            echo "❌ Root .env NOT found"
+            ls -la
+            exit 1
+          fi
 
       # ── Start full stack ───────────────────────────────
       # --wait blocks until all healthchecks pass
