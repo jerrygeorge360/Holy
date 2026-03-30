@@ -65,10 +65,14 @@ jobs:
       SPONSOR_PRIVATE_KEY: ${{ secrets.SPONSOR_PRIVATE_KEY }}
       NETWORK_ID: testnet
       GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-      NEAR_AI_API_KEY: ${{ secrets.NEAR_AI_API_KEY }}
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
       MAINTAINER_SECRET: ${{ secrets.MAINTAINER_SECRET }}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nyx_db
       DATABASE_URL: postgresql://postgres:postgres@db:5432/nyx_db?schema=public
       BACKEND_URL: http://nyx-backend:3001
       BACKEND_CALLBACK_URL: http://nyx-backend:3001/callback
@@ -121,30 +125,7 @@ jobs:
       - name: Install near-cli
         run: npm i -g near-cli
 
-      # ── Write .env files ───────────────────────────────
-      - name: Create .env files
-        run: |
-          cat <<EOF > .env
-          AGENT_CONTRACT_ID=${{ secrets.AGENT_CONTRACT_ID }}
-          SPONSOR_ACCOUNT_ID=${{ secrets.SPONSOR_ACCOUNT_ID }}
-          SPONSOR_PRIVATE_KEY=${{ secrets.SPONSOR_PRIVATE_KEY }}
-          NETWORK_ID=testnet
-          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
-          GH_WEBHOOK_SECRET=${{ secrets.GH_WEBHOOK_SECRET }}
-          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
-          OPENAI_KEY=${{ secrets.OPENAI_KEY }}
-          NEAR_AI_API_KEY=${{ secrets.NEAR_AI_API_KEY }}
-          MAINTAINER_SECRET=${{ secrets.MAINTAINER_SECRET }}
-          DATABASE_URL=postgresql://postgres:postgres@db:5432/nyx_db?schema=public
-          NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          POSTGRES_DB=nyx_db
-          BACKEND_URL=http://nyx-backend:3001
-          BACKEND_CALLBACK_URL=http://nyx-backend:3001/callback
-          EOF
-
-          # .env already exists in root, which all services now reference
+      # ── Note: .env files are no longer needed for Docker on the CI Runner ──
 
       # ── Configure shade auth ───────────────────────────
       - name: Configure shade auth
@@ -211,18 +192,7 @@ jobs:
 
           cat /tmp/shade-deploy.log
 
-      # ── Verify root .env ───────────────────────────────
-      - name: Verify root .env
-        run: |
-          if [ -f .env ]; then
-            echo "✅ Root .env exists"
-            ls -la .env
-            [ -s .env ] || { echo "❌ .env is empty"; exit 1; }
-          else
-            echo "❌ Root .env NOT found"
-            ls -la
-            exit 1
-          fi
+      # ── Note: Verification skipped as we use explicit job environment ──
 
       # ── Start full stack ───────────────────────────────
       # --wait blocks until all healthchecks pass
@@ -333,7 +303,7 @@ jobs:
             GH_WEBHOOK_SECRET=${{ secrets.GH_WEBHOOK_SECRET }}
             GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
             OPENAI_KEY=${{ secrets.OPENAI_KEY }}
-            NEAR_AI_API_KEY=${{ secrets.NEAR_AI_API_KEY }}
+            AI_API_KEY=${{ secrets.AI_API_KEY }}
             MAINTAINER_SECRET=${{ secrets.MAINTAINER_SECRET }}
             DATABASE_URL=postgresql://postgres:postgres@db:5432/nyx_db?schema=public
             POSTGRES_USER=postgres

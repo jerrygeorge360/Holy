@@ -27,10 +27,12 @@ services:
     restart: always
     ports:
       - "4000:3001"
-    env_file:
-      - ./.env
     environment:
-      DATABASE_URL: postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
+      - GH_TOKEN=${GH_TOKEN}
+      - GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET}
+      - MAINTAINER_SECRET=${MAINTAINER_SECRET}
     depends_on:
       db:
         condition: service_healthy
@@ -50,8 +52,9 @@ services:
     restart: always
     ports:
       - "3000:3000"
-    env_file:
-      - ./.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
     depends_on:
       - nyx-backend
     healthcheck:
@@ -70,8 +73,19 @@ services:
     restart: always
     ports:
       - "8083:3000"
-    env_file:
-      - ./.env
+    environment:
+      - AGENT_CONTRACT_ID=${AGENT_CONTRACT_ID}
+      - SPONSOR_ACCOUNT_ID=${SPONSOR_ACCOUNT_ID}
+      - SPONSOR_PRIVATE_KEY=${SPONSOR_PRIVATE_KEY}
+      - NETWORK_ID=${NETWORK_ID:-testnet}
+      - GH_TOKEN=${GH_TOKEN}
+      - GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET}
+      - AI_API_KEY=${AI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENAI_KEY=${OPENAI_KEY}
+      - MAINTAINER_SECRET=${MAINTAINER_SECRET}
+      - BACKEND_URL=${BACKEND_URL:-http://nyx-backend:3001}
+      - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://nyx-backend:3001/callback}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/agent-info"]
       interval: 15s
