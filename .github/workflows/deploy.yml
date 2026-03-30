@@ -130,14 +130,9 @@ jobs:
       # ── Configure shade auth ───────────────────────────
       - name: Configure shade auth
         run: |
-          mkdir -p ~/.shade
-          cat <<EOF > ~/.shade/config.json
-          {
-            "masterAccountId": "${{ secrets.SPONSOR_ACCOUNT_ID }}",
-            "privateKey": "${{ secrets.SPONSOR_PRIVATE_KEY }}",
-            "network": "testnet"
-          }
-          EOF
+          printf "${{ secrets.SPONSOR_ACCOUNT_ID }}\n${{ secrets.SPONSOR_PRIVATE_KEY }}\n" | shade auth set near testnet existing-account
+          echo "✅ Shade auth configured"
+          shade auth get near testnet
 
       # ── Patch deployment.yaml to use pre-built WASM ───
       - name: Patch deployment.yaml
