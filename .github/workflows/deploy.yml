@@ -110,7 +110,7 @@ jobs:
           cd ./shadeagent/shade-agent-v2/agent-contract
           cargo build --target wasm32-unknown-unknown --release
 
-          WASM_PATH="target/near/shade_contract_template.wasm"
+          WASM_PATH="target/wasm32-unknown-unknown/release/shade_contract_template.wasm"
           [ -f "$WASM_PATH" ] || { echo "❌ WASM not found at $WASM_PATH"; exit 1; }
           echo "✅ Contract built: $WASM_PATH"
 
