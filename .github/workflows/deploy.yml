@@ -57,6 +57,7 @@ jobs:
     name: Integration - Full Stack
     runs-on: ubuntu-latest
     needs: build
+    environment: beta
 
     env:
       AGENT_CONTRACT_ID: ${{ secrets.AGENT_CONTRACT_ID }}
@@ -211,6 +212,12 @@ jobs:
           done
 
           cat /tmp/shade-deploy.log
+
+      # ── Verify env files ────────────────────────────────
+      - name: Verify env files
+        run: |
+          ls -la .env backend/.env frontend/nyx-frontend/.env shadeagent/shade-agent-v2/.env
+          echo "✅ Env files verified"
 
       # ── Start full stack ───────────────────────────────
       # --wait blocks until all healthchecks pass
