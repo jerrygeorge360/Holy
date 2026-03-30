@@ -71,13 +71,12 @@ services:
       dockerfile: Dockerfile
     container_name: shade-agent-app
     restart: always
-    ports:
-      - "8083:3000"
     environment:
+      - DEBUG=true
+      - NETWORK_ID=testnet
       - AGENT_CONTRACT_ID=${AGENT_CONTRACT_ID}
       - SPONSOR_ACCOUNT_ID=${SPONSOR_ACCOUNT_ID}
       - SPONSOR_PRIVATE_KEY=${SPONSOR_PRIVATE_KEY}
-      - NETWORK_ID=${NETWORK_ID:-testnet}
       - GH_TOKEN=${GH_TOKEN}
       - GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET}
       - AI_API_KEY=${AI_API_KEY}

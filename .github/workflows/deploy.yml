@@ -127,65 +127,7 @@ jobs:
 
       # ── Note: .env files are no longer needed for Docker on the CI Runner ──
 
-      # ── Configure shade auth ───────────────────────────
-      - name: Configure shade auth
-        run: |
-          printf "${{ secrets.SPONSOR_ACCOUNT_ID }}\n${{ secrets.SPONSOR_PRIVATE_KEY }}\n" | shade auth set near testnet existing-account
-          echo "✅ Shade auth configured"
-          shade auth get near testnet
-
-      # ── Patch deployment.yaml to use pre-built WASM ───
-      - name: Patch deployment.yaml
-        run: |
-          python3 - <<'PYEOF'
-          import re
-
-          path = "./shadeagent/shade-agent-v2/deployment.yaml"
-          with open(path, "r") as f:
-              content = f.read()
-
-          content = re.sub(
-              r'(deploy_from_source:\s*\n\s*enabled:\s*)true',
-              r'\1false',
-              content
-          )
-          content = re.sub(
-              r'(deploy_from_wasm:\s*\n\s*enabled:\s*)false',
-              r'\1true',
-              content
-          )
-
-          with open(path, "w") as f:
-              f.write(content)
-
-          print("✅ deployment.yaml patched to deploy_from_wasm")
-          PYEOF
-
-      # ── Run shade deploy (starts sidecar) ─────────────
-      # Must run before docker compose up so the sidecar
-      # is available when the agent container starts
-      - name: Start Shade Sidecar
-        run: |
-          cd ./shadeagent/shade-agent-v2
-          shade deploy > /tmp/shade-deploy.log 2>&1 &
-          echo "SHADE_PID=$!" >> $GITHUB_ENV
-
-          echo "Waiting for shade deploy to complete..."
-          for i in $(seq 1 40); do
-            if grep -q "Deployment completed successfully" /tmp/shade-deploy.log 2>/dev/null; then
-              echo "✅ Shade sidecar ready"
-              break
-            fi
-            if grep -qE "^Error|error deploying|fetch failed" /tmp/shade-deploy.log 2>/dev/null; then
-              echo "❌ Shade deploy failed:"
-              cat /tmp/shade-deploy.log
-              exit 1
-            fi
-            echo "⏳ $i/40 waiting for shade deploy..."
-            sleep 5
-          done
-
-          cat /tmp/shade-deploy.log
+      # ── Note: Shade CLI steps removed as agent handles its own registration ──
 
       # ── Note: Verification skipped as we use explicit job environment ──
 
@@ -239,8 +181,6 @@ jobs:
         run: |
           echo "=== Container Status ==="
           docker compose ps
-          echo "=== Shade Deploy Log ==="
-          cat /tmp/shade-deploy.log || true
           echo "=== Agent Logs ==="
           docker compose logs shade-agent-app --tail=50 || true
           echo "=== Backend Logs ==="
@@ -255,7 +195,6 @@ jobs:
         if: always()
         run: |
           docker compose down --volumes --remove-orphans || true
-          kill $SHADE_PID 2>/dev/null || true
   # ─────────────────────────────────────────────────────────
   # JOB 3: Deploy to Azure VM
   # ─────────────────────────────────────────────────────────
