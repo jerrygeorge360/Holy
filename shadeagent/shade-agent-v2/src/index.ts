@@ -71,7 +71,7 @@ console.log("Agent registered successfully");
 
   /**
    * @swagger
-   * /api/health:
+   * /api/agent-info:
    *   get:
    *     summary: Check agent health and status
    *     tags: [Health]
@@ -79,12 +79,12 @@ console.log("Agent registered successfully");
    *       200:
    *         description: Agent status and payout stats
    */
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/agent-info", (_req, res) => {
     const payouts = getPayoutStats();
     res.json({
       status: "ok",
       agent: "registered",
-      agentAccountId: getAgent().accountId(),
+      accountId: getAgent().accountId(),
       payouts,
     });
   });

@@ -30,7 +30,7 @@ When deployed to Phala TEE, the Agent provides:
 ## API Reference
 
 ### Health & Stats
-- **GET /api/health**: Returns agent status, registration info, and aggregate payout statistics.
+- **GET /api/agent-info**: Returns agent status, registration info, and aggregate payout statistics.
 
 ### Repository Management
 - **POST /api/repo/register**: Manually register a repository and its maintainer on the NEAR contract.

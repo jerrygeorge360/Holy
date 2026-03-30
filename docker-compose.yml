@@ -71,6 +71,8 @@ services:
       dockerfile: Dockerfile
     container_name: shade-agent-app
     restart: always
+    ports:
+      - "8083:3000"
     environment:
       - DEBUG=true
       - NETWORK_ID=testnet

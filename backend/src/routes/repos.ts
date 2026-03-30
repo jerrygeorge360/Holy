@@ -685,13 +685,13 @@ router.post("/:owner/:repo/fund", async (req: Request, res: Response) => {
     }
 
     // Get contract info from shade agent
-    const healthResponse = await fetch(`${config.shadeAgentUrl}/api/health`);
+    const healthResponse = await fetch(`${config.shadeAgentUrl}/api/agent-info`);
     if (!healthResponse.ok) {
       return res.status(503).json({ error: "Agent service unavailable" });
     }
 
     const healthData = await healthResponse.json();
-    const contractId = healthData.agentAccountId;
+    const contractId = healthData.accountId;
     const maintainerAccount = repository.nearWallet || `${repository.owner.username}.testnet`;
 
     return res.json({

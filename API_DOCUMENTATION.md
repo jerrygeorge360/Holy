@@ -77,7 +77,7 @@ While the backend manages states, the Agent (running on port 3000) provides thes
 
 - `POST /api/repo/register`: Registers a repo on the blockchain.
 - `POST /api/bounty/release`: Manually triggers a NEAR release (requires `MAINTAINER_SECRET`).
-- `GET /api/health`: Check TEE status and payout statistics.
+- `GET /api/agent-info`: Check TEE status and payout statistics.
 
 ---
 
@@ -88,7 +88,7 @@ While the backend manages states, the Agent (running on port 3000) provides thes
 | `401` | Unauthorized | Missing logic or invalid Bearer token. |
 | `403` | Forbidden | Invalid `x-agent-secret` or trying to modify a repo you don't own. |
 | `424` | Failed Dependency | The Backend couldn't reach the Shade Agent or GitHub API. |
-| `503` | Service Unavailable | Check if the Shade Agent is running on port 3000. |
+| `503` | Service Unavailable | Check if the Shade Agent is running on port 8083. |
 
 ---
 **Document Version: 2.1**
