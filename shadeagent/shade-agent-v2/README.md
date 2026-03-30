@@ -54,7 +54,7 @@ SPONSOR_ACCOUNT_ID=     # Account used to fund/sponsor transactions
 SPONSOR_PRIVATE_KEY=    # Private key for the sponsor account
 
 # GitHub & Security
-GITHUB_WEBHOOK_SECRET=  # Secret for validating GitHub webhooks
+GH_WEBHOOK_SECRET=  # Secret for validating GitHub webhooks
 MAINTAINER_SECRET=      # Secret used to authorize requests from the Holy Backend
 
 # AI Models

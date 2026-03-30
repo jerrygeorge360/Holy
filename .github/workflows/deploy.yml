@@ -17,6 +17,7 @@ jobs:
   build:
     name: Build & Lint
     runs-on: ubuntu-latest
+    environment: beta  
 
     steps:
       - name: Checkout
@@ -62,7 +63,7 @@ jobs:
       SPONSOR_ACCOUNT_ID: ${{ secrets.SPONSOR_ACCOUNT_ID }}
       SPONSOR_PRIVATE_KEY: ${{ secrets.SPONSOR_PRIVATE_KEY }}
       NETWORK_ID: testnet
-      GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
+      GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
       NEAR_AI_API_KEY: ${{ secrets.NEAR_AI_API_KEY }}
@@ -128,7 +129,7 @@ jobs:
           SPONSOR_PRIVATE_KEY=${{ secrets.SPONSOR_PRIVATE_KEY }}
           NETWORK_ID=testnet
           GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
-          GITHUB_WEBHOOK_SECRET=${{ secrets.GITHUB_WEBHOOK_SECRET }}
+          GH_WEBHOOK_SECRET=${{ secrets.GH_WEBHOOK_SECRET }}
           GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
           OPENAI_KEY=${{ secrets.OPENAI_KEY }}
           NEAR_AI_API_KEY=${{ secrets.NEAR_AI_API_KEY }}

@@ -14,7 +14,7 @@ const ISSUE_REF_REGEX = /#(\d+)/g;
 
 function verifySignature(rawBody: Buffer, signatureHeader?: string): boolean {
   if (!signatureHeader) return false;
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const secret = process.env.GH_WEBHOOK_SECRET;
   if (!secret) return false;
 
   const hmac = crypto.createHmac("sha256", secret);

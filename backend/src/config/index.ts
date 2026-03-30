@@ -13,7 +13,7 @@ export const config = {
     clientId: process.env.GITHUB_CLIENT_ID || "Iv23litMcyF0U0TuPPIX",
     clientSecret: process.env.GITHUB_CLIENT_SECRET || "0adffdc30bb80ffd529140c481850017edad4e6a",
     redirectUri: process.env.GITHUB_REDIRECT_URI || "http://localhost:3001/auth/github/callback",
-    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || "ultimateman",
+    webhookSecret: process.env.GH_WEBHOOK_SECRET || "ultimateman",
   },
 
   // JWT / Session

@@ -54,7 +54,6 @@ shadeagent/**/.nyc_output/
 shadeagent/**/logs/
 shadeagent/**/*.log
 shadeagent/**/.env
-shadeagent/**/.env.*
 shadeagent/**/.env.local
 shadeagent/**/.env.*.local
 shadeagent/**/out/
@@ -106,3 +105,4 @@ build/
 .turbo/
 
 shade-agent-key.txt
+.env-production

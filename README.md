@@ -236,7 +236,7 @@ Key variables:
 
 | Variable | Location | Description |
 |----------|----------|-------------|
-| `GITHUB_WEBHOOK_SECRET` | `backend/`, `shadeagent/` | Shared secret for webhook verification |
+| `GH_WEBHOOK_SECRET` | `backend/`, `shadeagent/` | Shared secret for webhook verification |
 | `MAINTAINER_SECRET` | `backend/` | Secret for agent-to-backend communication |
 | `NEAR_ACCOUNT_ID` | `shadeagent/` | The agent's NEAR account for signing payouts |
 | `SHADE_AGENT_URL` | `backend/` | URL of the running Shade Agent (ngrok URL locally) |
@@ -352,7 +352,7 @@ Holy/
 > ⚠️ For production deployment:
 
 - All private key operations occur inside the **Phala TEE** — keys never leave the enclave
-- The `MAINTAINER_SECRET` and `GITHUB_WEBHOOK_SECRET` should be long, randomly generated strings
+- The `MAINTAINER_SECRET` and `GH_WEBHOOK_SECRET` should be long, randomly generated strings
 - The NEAR smart contract enforces that only the registered agent address can trigger payouts
 - Always use the production Phala deployment rather than the local Shade Agent for mainnet funds
 - Rotate your ngrok URL in `SHADE_AGENT_URL` every session during local development
