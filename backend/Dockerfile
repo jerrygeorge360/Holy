@@ -21,4 +21,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY package.json ./
 
 # Automatically deploy Prisma schema migrations seamlessly into DB before node startup
-CMD npx prisma migrate deploy && npm run start
+# We use a subshell to log errors but continue to server start to avoid "silent" container hangs
+CMD echo "🚀 Starting Backend Services..." && \
+    (npx prisma migrate deploy || { echo "❌ Prisma Migration Failed!"; exit 1; }) && \
+    echo "✅ Database Migrations Applied" && \
+    npm run start
