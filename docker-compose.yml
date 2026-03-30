@@ -91,9 +91,10 @@ services:
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://nyx-backend:3001/callback}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/agent-info"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 60s
     networks:
       - nyx-network
 
