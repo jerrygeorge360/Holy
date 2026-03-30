@@ -144,9 +144,7 @@ jobs:
           BACKEND_CALLBACK_URL=http://nyx-backend:3001/callback
           EOF
 
-          cp .env ./backend/.env
-          cp .env ./frontend/nyx-frontend/.env
-          cp .env ./shadeagent/shade-agent-v2/.env
+          # .env already exists in root, which all services now reference
 
       # ── Configure shade auth ───────────────────────────
       - name: Configure shade auth
@@ -339,9 +337,7 @@ jobs:
             ENVEOF
 
             # Deploy component envs
-            cp .env ./backend/.env
-            cp .env ./frontend/nyx-frontend/.env
-            cp .env ./shadeagent/shade-agent-v2/.env
+            # .env already exists in root, which all services now reference
 
             # Restart stack
             docker compose up --build -d

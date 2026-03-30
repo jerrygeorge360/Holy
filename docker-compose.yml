@@ -28,7 +28,7 @@ services:
     ports:
       - "4000:3001"
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       DATABASE_URL: postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
     depends_on:
@@ -51,7 +51,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - ./frontend/nyx-frontend/.env
+      - ./.env
     depends_on:
       - nyx-backend
     healthcheck:
@@ -71,7 +71,7 @@ services:
     ports:
       - "8083:3000"
     env_file:
-      - ./shadeagent/shade-agent-v2/.env
+      - ./.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/agent-info"]
       interval: 15s
