@@ -1,5 +1,5 @@
 # environment: local | TEE
-environment: TEE
+environment: local
 
 # network: testnet | mainnet
 network: testnet
@@ -12,7 +12,7 @@ agent_contract:
   # Fill this out with a unique contract id for your agent contract
   # For example: example-contract-123.testnet
   # This account should not already be in use
-  contract_id: jerryshadeagent-contract.testnet
+  contract_id: wemoveithereo.testnet
   # Optional, if not enabled the contract will not be deployed
   # and it's assumed the agent contract is already deployed to the contract_id
   # and is initialized
@@ -30,7 +30,7 @@ agent_contract:
       source_path: ./agent-contract
     # Option 2: Use pre-built WASM file
     deploy_from_wasm:
-      enabled: false
+      enabled: true
       wasm_path:  ./agent-contract/target/near/shade_contract_template.wasm
     # Option 3: Use a deployed global contract, specifying it by its hash
     use_global_by_hash:
@@ -98,7 +98,7 @@ build_docker_image:
 # Optional, if not enabled the app will not be deployed to Phala Cloud
 # Only applicable if the environment is TEE
 deploy_to_phala:
-  enabled: true
+  enabled: false
   app_name: holy-bounty-agent
   env_file_path: ./.env
 

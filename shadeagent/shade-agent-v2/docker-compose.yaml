@@ -1,5 +1,8 @@
 services:
   shade-agent-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       AGENT_CONTRACT_ID: ${AGENT_CONTRACT_ID}
       SPONSOR_ACCOUNT_ID: ${SPONSOR_ACCOUNT_ID}
@@ -14,10 +17,7 @@ services:
       BACKEND_URL: ${BACKEND_URL}
       BACKEND_CALLBACK_URL: ${BACKEND_CALLBACK_URL}
     platform: linux/amd64
-    image: jerrygeorge/holy@sha256:7c3be5bad0702688cf07a89c13256f90f06183592f725739933fb3dad1286b56
     container_name: shade-agent-app
     ports:
-      - 3000:3000
-    volumes:
-      - /var/run/dstack.sock:/var/run/dstack.sock
+      - "8083:3000"
     restart: always

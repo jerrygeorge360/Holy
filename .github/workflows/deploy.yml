@@ -1,0 +1,280 @@
+name: Full Stack - Shade Agent CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+
+# ─────────────────────────────────────────────────────────
+# JOB 1: Build & unit tests (fast, no Docker)
+# ─────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install agent dependencies
+        run: npm ci --prefix ./shadeagent/shade-agent-v2
+
+      - name: Install backend dependencies
+        run: npm ci --prefix ./backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ./frontend/nyx-frontend
+
+      - name: Lint agent
+        run: npm run lint --if-present --prefix ./shadeagent/shade-agent-v2
+
+      - name: Lint backend
+        run: npm run lint --if-present --prefix ./backend
+
+      - name: Unit tests - agent
+        run: npm run test:unit --if-present --prefix ./shadeagent/shade-agent-v2
+
+      - name: Unit tests - backend
+        run: npm run test:unit --if-present --prefix ./backend
+
+  # ─────────────────────────────────────────────────────────
+  # JOB 2: Full stack integration
+  # ─────────────────────────────────────────────────────────
+  integration:
+    name: Integration - Full Stack
+    runs-on: ubuntu-latest
+    needs: build
+
+    env:
+      AGENT_CONTRACT_ID: ${{ secrets.AGENT_CONTRACT_ID }}
+      SPONSOR_ACCOUNT_ID: ${{ secrets.SPONSOR_ACCOUNT_ID }}
+      SPONSOR_PRIVATE_KEY: ${{ secrets.SPONSOR_PRIVATE_KEY }}
+      NETWORK_ID: testnet
+      GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+      NEAR_AI_API_KEY: ${{ secrets.NEAR_AI_API_KEY }}
+      MAINTAINER_SECRET: ${{ secrets.MAINTAINER_SECRET }}
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/nyx_db?schema=public
+      BACKEND_URL: http://nyx-backend:3001
+      BACKEND_CALLBACK_URL: http://nyx-backend:3001/callback
+      FRONTEND_URL: http://localhost:3000
+      AGENT_URL: http://localhost:8083
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      # ── Rust + wasm32 target ───────────────────────────
+      - name: Setup Rust + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      # ── Cache cargo build artifacts ────────────────────
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: ./shadeagent/shade-agent-v2/agent-contract/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # ── Build agent contract WASM ──────────────────────
+      - name: Build agent contract
+        run: |
+          cd ./shadeagent/shade-agent-v2/agent-contract
+          cargo build --target wasm32-unknown-unknown --release
+
+          WASM_PATH="target/near/shade_contract_template.wasm"
+          [ -f "$WASM_PATH" ] || { echo "❌ WASM not found at $WASM_PATH"; exit 1; }
+          echo "✅ Contract built: $WASM_PATH"
+
+      - name: Install agent dependencies
+        run: npm ci --prefix ./shadeagent/shade-agent-v2
+
+      # ── Install Shade CLI ──────────────────────────────
+      - name: Install Shade Agent CLI
+        run: npm i -g @neardefi/shade-agent-cli
+
+      # ── Install near-cli ───────────────────────────────
+      - name: Install near-cli
+        run: npm i -g near-cli
+
+      # ── Write .env files ───────────────────────────────
+      - name: Create .env files
+        run: |
+          cat <<EOF > .env
+          AGENT_CONTRACT_ID=${{ secrets.AGENT_CONTRACT_ID }}
+          SPONSOR_ACCOUNT_ID=${{ secrets.SPONSOR_ACCOUNT_ID }}
+          SPONSOR_PRIVATE_KEY=${{ secrets.SPONSOR_PRIVATE_KEY }}
+          NETWORK_ID=testnet
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          GITHUB_WEBHOOK_SECRET=${{ secrets.GITHUB_WEBHOOK_SECRET }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          OPENAI_KEY=${{ secrets.OPENAI_KEY }}
+          NEAR_AI_API_KEY=${{ secrets.NEAR_AI_API_KEY }}
+          MAINTAINER_SECRET=${{ secrets.MAINTAINER_SECRET }}
+          DATABASE_URL=postgresql://postgres:postgres@db:5432/nyx_db?schema=public
+          NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=nyx_db
+          BACKEND_URL=http://nyx-backend:3001
+          BACKEND_CALLBACK_URL=http://nyx-backend:3001/callback
+          EOF
+
+          cp .env ./backend/.env
+          cp .env ./frontend/nyx-frontend/.env
+          cp .env ./shadeagent/shade-agent-v2/.env
+
+      # ── Configure shade auth ───────────────────────────
+      - name: Configure shade auth
+        run: |
+          mkdir -p ~/.shade
+          cat <<EOF > ~/.shade/config.json
+          {
+            "masterAccountId": "${{ secrets.SPONSOR_ACCOUNT_ID }}",
+            "privateKey": "${{ secrets.SPONSOR_PRIVATE_KEY }}",
+            "network": "testnet"
+          }
+          EOF
+
+      # ── Patch deployment.yaml to use pre-built WASM ───
+      - name: Patch deployment.yaml
+        run: |
+          python3 - <<'PYEOF'
+          import re
+
+          path = "./shadeagent/shade-agent-v2/deployment.yaml"
+          with open(path, "r") as f:
+              content = f.read()
+
+          content = re.sub(
+              r'(deploy_from_source:\s*\n\s*enabled:\s*)true',
+              r'\1false',
+              content
+          )
+          content = re.sub(
+              r'(deploy_from_wasm:\s*\n\s*enabled:\s*)false',
+              r'\1true',
+              content
+          )
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print("✅ deployment.yaml patched to deploy_from_wasm")
+          PYEOF
+
+      # ── Run shade deploy (starts sidecar) ─────────────
+      # Must run before docker compose up so the sidecar
+      # is available when the agent container starts
+      - name: Start Shade Sidecar
+        run: |
+          cd ./shadeagent/shade-agent-v2
+          shade deploy > /tmp/shade-deploy.log 2>&1 &
+          echo "SHADE_PID=$!" >> $GITHUB_ENV
+
+          echo "Waiting for shade deploy to complete..."
+          for i in $(seq 1 40); do
+            if grep -q "Deployment completed successfully" /tmp/shade-deploy.log 2>/dev/null; then
+              echo "✅ Shade sidecar ready"
+              break
+            fi
+            if grep -qE "^Error|error deploying|fetch failed" /tmp/shade-deploy.log 2>/dev/null; then
+              echo "❌ Shade deploy failed:"
+              cat /tmp/shade-deploy.log
+              exit 1
+            fi
+            echo "⏳ $i/40 waiting for shade deploy..."
+            sleep 5
+          done
+
+          cat /tmp/shade-deploy.log
+
+      # ── Start full stack ───────────────────────────────
+      # --wait blocks until all healthchecks pass
+      # no manual curl loops needed
+      - name: Docker Compose Up
+        run: |
+          docker compose up --build -d --wait
+          echo "✅ Full stack is up and healthy"
+          docker compose ps
+
+      # ── Capture agent account ID ───────────────────────
+      - name: Capture agent account ID
+        run: |
+          AGENT_INFO=$(curl -sf ${{ env.AGENT_URL }}/api/agent-info)
+          echo "Agent info: $AGENT_INFO"
+
+          AGENT_ACCOUNT_ID=$(echo "$AGENT_INFO" | jq -r '.accountId // .account_id // empty')
+
+          if [ -z "$AGENT_ACCOUNT_ID" ]; then
+            echo "❌ Could not extract agent account ID"
+            docker compose logs shade-agent-app
+            exit 1
+          fi
+
+          echo "✅ Agent account ID: $AGENT_ACCOUNT_ID"
+          echo "AGENT_ACCOUNT_ID=$AGENT_ACCOUNT_ID" >> $GITHUB_ENV
+
+      # ── Whitelist agent ────────────────────────────────
+      - name: Whitelist agent on contract
+        run: |
+          near call ${{ secrets.AGENT_CONTRACT_ID }} whitelist_agent_for_local \
+            "{\"account_id\": \"$AGENT_ACCOUNT_ID\"}" \
+            --accountId ${{ secrets.SPONSOR_ACCOUNT_ID }} \
+            --networkId testnet \
+            --keyPath /dev/stdin <<< \
+            "{\"account_id\": \"${{ secrets.SPONSOR_ACCOUNT_ID }}\", \"public_key\": \"\", \"private_key\": \"${{ secrets.SPONSOR_PRIVATE_KEY }}\"}"
+
+          echo "✅ Agent whitelisted"
+
+      # ── Integration Tests ──────────────────────────────
+      - name: Run Integration Tests
+        run: |
+          npm run test:integration --if-present --prefix ./shadeagent/shade-agent-v2
+          npm run test:integration --if-present --prefix ./backend
+
+      # ── Debug on failure ───────────────────────────────
+      - name: Debug Output
+        if: failure()
+        run: |
+          echo "=== Container Status ==="
+          docker compose ps
+          echo "=== Shade Deploy Log ==="
+          cat /tmp/shade-deploy.log || true
+          echo "=== Agent Logs ==="
+          docker compose logs shade-agent-app --tail=50 || true
+          echo "=== Backend Logs ==="
+          docker compose logs nyx-backend --tail=50 || true
+          echo "=== Frontend Logs ==="
+          docker compose logs nyx-frontend --tail=50 || true
+          echo "=== DB Logs ==="
+          docker compose logs db --tail=20 || true
+
+      # ── Cleanup ────────────────────────────────────────
+      - name: Global Cleanup
+        if: always()
+        run: |
+          docker compose down --volumes --remove-orphans || true
+          kill $SHADE_PID 2>/dev/null || true

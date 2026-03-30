@@ -1,0 +1,88 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nyx-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nyx_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-nyx_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nyx-network
+
+  nyx-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nyx-backend
+    restart: always
+    ports:
+      - "4000:3001"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@db:5432/$${POSTGRES_DB:-nyx_db}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nyx-network
+
+  nyx-frontend:
+    build:
+      context: ./frontend/nyx-frontend
+      dockerfile: Dockerfile
+    container_name: nyx-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/nyx-frontend/.env
+    depends_on:
+      - nyx-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - nyx-network
+
+  shade-agent-app:
+    build:
+      context: ./shadeagent/shade-agent-v2
+      dockerfile: Dockerfile
+    container_name: shade-agent-app
+    restart: always
+    ports:
+      - "8083:3000"
+    env_file:
+      - ./shadeagent/shade-agent-v2/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/agent-info"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - nyx-network
+
+networks:
+  nyx-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
